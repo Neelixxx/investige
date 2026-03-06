@@ -13,10 +13,13 @@ Investige is a Pokemon TCG analytics app for grading-aware investing.
 
 ## Added in this update
 
-- Direct TCGplayer OAuth ingestion (beyond PokemonTCG passthrough):
+- Live PokemonTCG ingestion (primary source):
+  - live set/card catalog sync
+  - live raw price ingestion from PokemonTCG pricing fields
+- Optional legacy Direct TCGplayer OAuth ingestion:
   - OAuth token flow against TCGplayer API
   - group + product matching
-  - direct market price ingestion into sales feed (`TCGPLAYER_DIRECT`)
+  - direct market price ingestion into sales feed (`TCGPLAYER_DIRECT`) when credentials are provided
 - Background jobs with queue + scheduler:
   - recurring sync jobs stored in DB
   - queued one-off tasks
@@ -93,10 +96,7 @@ Key ones:
 - `REDIS_URL` (optional; enables queue worker mode)
 - `POKEMONTCG_API_KEY`
 - `EUR_TO_USD_RATE`
-- `TCGPLAYER_PUBLIC_KEY`
-- `TCGPLAYER_PRIVATE_KEY`
-- `TCGPLAYER_CATEGORY_ID` (default `3` for Pokemon)
-- `TCGPLAYER_ACCESS_TOKEN` (optional passthrough header)
+- `ALLOW_SEEDED_ANALYTICS` (`0` in production to prefer live-only analytics)
 - `SCHEDULER_TICK_MS`
 - `WORKER_TICK_MS`
 - `WORKER_CONCURRENCY`
@@ -110,6 +110,13 @@ Key ones:
 - `STRIPE_WEBHOOK_SECRET`
 - `STRIPE_PRICE_PRO_MONTHLY`
 - `STRIPE_PRICE_ELITE_MONTHLY`
+
+Optional legacy direct TCGplayer vars (leave blank if not used):
+
+- `TCGPLAYER_PUBLIC_KEY`
+- `TCGPLAYER_PRIVATE_KEY`
+- `TCGPLAYER_CATEGORY_ID` (default `3` for Pokemon)
+- `TCGPLAYER_ACCESS_TOKEN` (optional passthrough header)
 
 ## Background sync architecture
 
@@ -212,7 +219,7 @@ Sync and jobs:
 
 - `GET /api/sync/status`
 - `POST /api/sync/catalog` (enqueue catalog task)
-- `POST /api/sync/sales` (enqueue sales or direct TCGplayer task)
+- `POST /api/sync/sales` (enqueue sales task; optional direct TCGplayer mode if configured)
 - `GET /api/jobs/status` (admin)
 - `POST /api/jobs/enqueue` (admin)
 - `POST /api/jobs/worker` (admin or cron secret)

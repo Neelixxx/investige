@@ -49,6 +49,7 @@
     "stripe": "^20.3.1",
     "tailwindcss": "^4.2.0",
     "tesseract.js": "^7.0.0",
+    "tsx": "^4.21.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
@@ -61,7 +62,6 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "playwright": "^1.58.2",
-    "tsx": "^4.21.0",
     "typescript": "^5",
     "vitest": "^4.0.18"
   }

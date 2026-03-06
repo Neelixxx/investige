@@ -24,24 +24,34 @@ Use `infra/render/render.yaml` to provision:
 2. In Render, create a new Blueprint and point to `infra/render/render.yaml`.
 3. Set required env vars in Render:
    - `POKEMONTCG_API_KEY`
-   - `TCGPLAYER_PUBLIC_KEY`
-   - `TCGPLAYER_PRIVATE_KEY`
+   - `ALLOW_SEEDED_ANALYTICS=0`
    - `RESEND_API_KEY`
    - `EMAIL_FROM`
    - `STRIPE_SECRET_KEY`
    - `STRIPE_WEBHOOK_SECRET`
    - `STRIPE_PRICE_PRO_MONTHLY`
    - `STRIPE_PRICE_ELITE_MONTHLY`
-4. After first deploy, run Prisma migration against managed Postgres:
+4. Optional legacy direct TCGplayer sync vars (only if you have working credentials):
+   - `TCGPLAYER_PUBLIC_KEY`
+   - `TCGPLAYER_PRIVATE_KEY`
+   - `TCGPLAYER_CATEGORY_ID` (default `3`)
+   - `TCGPLAYER_ACCESS_TOKEN` (optional passthrough)
+5. After first deploy, run Prisma migration against managed Postgres:
    - `npx prisma migrate deploy`
-5. Verify health:
+6. Verify health:
    - `GET https://gemindex.onrender.com/api/health`
    - Expected: JSON with `"status":"ok"` and `totals` fields.
-6. Verify homepage is Investige (not Next starter):
+7. Verify homepage is Investige (not Next starter):
    - Open `https://gemindex.onrender.com`
    - Expected page title contains `Investige | Pokemon TCG Analytics`
-7. Verify worker:
+8. Verify worker:
    - `POST /api/jobs/worker?token=<CRON_SECRET>`
+
+## Live Data Source Note
+
+- Investige can run fully live using only `POKEMONTCG_API_KEY` for catalog + pricing ingestion.
+- If TCGplayer developer API credentials are unavailable, leave all `TCGPLAYER_*` vars blank.
+- In that mode, run sales sync with `provider: "POKEMONTCG"`.
 
 ## If you see "Create Next App" on Render
 
