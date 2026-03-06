@@ -1,6 +1,6 @@
-# Gem Index
+# Investige
 
-Gem Index is a Pokemon TCG analytics app for grading-aware investing.
+Investige is a Pokemon TCG analytics app for grading-aware investing.
 
 ## What is implemented
 
@@ -49,9 +49,9 @@ Open `http://localhost:3000`.
 
 ## Expo Go (Mobile Wrapper)
 
-The `mobile/` folder is an Expo app that opens Gem Index in a native WebView.
+The `mobile/` folder is an Expo app that opens Investige in a native WebView.
 
-1. Start Gem Index web app:
+1. Start Investige web app:
 ```bash
 npm run dev
 ```
@@ -76,6 +76,7 @@ npm run test:e2e
 
 ## Default seeded admin
 
+- Username: `demo`
 - Email: `demo@gemindex.local`
 - Password: `demo1234`
 
@@ -183,6 +184,10 @@ Password reset:
 
 - `POST /api/auth/password-reset/request`
 - `POST /api/auth/password-reset/confirm`
+
+Username recovery:
+
+- `POST /api/auth/username-recovery/request`
 
 Billing:
 

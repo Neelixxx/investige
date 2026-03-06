@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { setMetrics } from "@/lib/analytics";
+import { sealedSetMarketSeries, setMetrics } from "@/lib/analytics";
 import { assessDataQuality } from "@/lib/data-quality";
 import { readDb } from "@/lib/db";
 
@@ -25,5 +25,13 @@ export async function GET() {
     items,
     catalog: db.sets,
     dataQuality,
+    sealedSetHistory: db.sets
+      .map((set) => ({
+        setId: set.id,
+        setCode: set.code,
+        setName: set.name,
+        series: sealedSetMarketSeries(db, set.id),
+      }))
+      .filter((set) => set.series.length > 0),
   });
 }

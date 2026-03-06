@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { requireAdmin } from "@/lib/auth";
+import { readDb } from "@/lib/db";
 import { enqueueSyncTask, runWorkerTick } from "@/lib/jobs";
 import { logger } from "@/lib/logger";
 import { requestIdFromRequest } from "@/lib/observability";
@@ -46,8 +47,11 @@ export async function POST(request: NextRequest) {
 
   if (parse.data.runNow) {
     const worker = await runWorkerTick({ source: "manual" });
+    const db = await readDb(true);
+    const completedTask =
+      db.syncTasks.find((entry) => entry.id === task.id) ?? null;
     logger.info({ requestId, taskId: task.id, runNow: true, worker }, "catalog sync enqueued");
-    return NextResponse.json({ queued: task, worker }, { status: 202 });
+    return NextResponse.json({ queued: task, worker, completedTask }, { status: 202 });
   }
 
   logger.info({ requestId, taskId: task.id, runNow: false }, "catalog sync enqueued");

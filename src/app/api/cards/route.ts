@@ -30,6 +30,11 @@ export async function GET(request: NextRequest) {
         cardName: card?.name ?? item.cardLabel,
         cardNumber: card?.cardNumber ?? "",
         setCode: set?.code ?? "",
+        setName: set?.name ?? item.setName,
+        setLogoUrl: set?.logoUrl,
+        setSymbolUrl: set?.symbolUrl,
+        imageUrl: card?.imageUrl,
+        imageLargeUrl: card?.imageLargeUrl,
         series: investmentMetricsReady ? marketSeries(db, item.cardId) : [],
       };
     });

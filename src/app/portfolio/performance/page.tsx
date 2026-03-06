@@ -6,8 +6,23 @@ import { AnalyticsNav } from "@/components/analytics-nav";
 
 export const dynamic = "force-dynamic";
 
+const RAW_CARD_CONDITION_MULTIPLIERS: Record<"NM" | "LP" | "HP" | "DMG", number> = {
+  NM: 1,
+  LP: 0.85,
+  HP: 0.7,
+  DMG: 0.5,
+};
+
 function usd(value: number): string {
-  return `$${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+  return `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function formatPercent(value: number, digits = 2): string {
+  const rounded = Number(value.toFixed(digits));
+  if (rounded === 100) {
+    return "100%";
+  }
+  return `${rounded.toFixed(digits)}%`;
 }
 
 export default async function PortfolioPerformancePage() {
@@ -18,20 +33,32 @@ export default async function PortfolioPerformancePage() {
   const metrics = cardMetrics(db);
   const metricByCard = new Map(metrics.map((entry) => [entry.cardId, entry]));
 
+  // accumulate separate totals for raw and graded card values so we can display them individually
+  let rawPortfolioValue = 0;
+  let gradedPortfolioValue = 0;
+
   const rows = db.collectionItems
     .filter((item) => item.userId === user?.id)
     .map((item) => {
       const metric = metricByCard.get(item.cardId);
+      const rawCondition = item.rawCondition ?? "NM";
       const marketEach =
         item.ownershipType === "GRADED" && item.grader === "PSA"
           ? (metric?.psa10Price ?? 0)
           : item.ownershipType === "GRADED" && item.grader === "TAG"
             ? (metric?.tag10Price ?? 0)
-            : (metric?.rawPrice ?? 0);
+            : (metric?.rawPrice ?? 0) * RAW_CARD_CONDITION_MULTIPLIERS[rawCondition];
 
       const marketValue = marketEach * item.quantity;
       const costBasis = (item.acquisitionPriceUsd ?? 0) * item.quantity;
       const pnl = marketValue - costBasis;
+
+      // increment breakdown totals
+      if (item.ownershipType === "GRADED") {
+        gradedPortfolioValue += marketValue;
+      } else {
+        rawPortfolioValue += marketValue;
+      }
 
       const card = db.cards.find((entry) => entry.id === item.cardId);
       const set = card ? db.sets.find((entry) => entry.id === card.setId) : null;
@@ -47,7 +74,8 @@ export default async function PortfolioPerformancePage() {
       };
     });
 
-  const portfolioValue = rows.reduce((sum, row) => sum + row.marketValue, 0);
+  // combined value is still useful for ROI calculations, but we no longer surface it directly
+  const portfolioValue = rawPortfolioValue + gradedPortfolioValue;
   const costBasis = rows.reduce((sum, row) => sum + row.costBasis, 0);
   const pnl = portfolioValue - costBasis;
 
@@ -70,13 +98,14 @@ export default async function PortfolioPerformancePage() {
         {!investmentMetricsReady ? <p className="mt-2 text-sm text-amber-700">{dataQuality.blockingReason}</p> : null}
       </section>
 
-      <section className="grid gap-3 md:grid-cols-5">
-        <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">Collection MV: {investmentMetricsReady ? usd(portfolioValue) : "Pending"}</div>
+      <section className="grid gap-3 md:grid-cols-6">
+        <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">Raw Collection MV: {investmentMetricsReady ? usd(rawPortfolioValue) : "Pending"}</div>
+        <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">Graded Collection MV: {investmentMetricsReady ? usd(gradedPortfolioValue) : "Pending"}</div>
         <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">Sealed MV: {investmentMetricsReady ? usd(sealedValue) : "Pending"}</div>
         <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">Cost Basis: {usd(costBasis)}</div>
         <div className={`rounded-xl border border-slate-200 bg-white p-3 text-sm ${pnl >= 0 ? "text-emerald-700" : "text-rose-700"}`}>P/L: {investmentMetricsReady ? usd(pnl) : "Pending"}</div>
         <div className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
-          {investmentMetricsReady ? `Portfolio ROI ${portfolioRoi.toFixed(2)}% | Index ROI ${benchmarkRoi.toFixed(2)}%` : "ROI metrics pending live data readiness."}
+          {investmentMetricsReady ? `Portfolio ROI ${formatPercent(portfolioRoi)} | Index ROI ${formatPercent(benchmarkRoi)}` : "ROI metrics pending live data readiness."}
         </div>
       </section>
 

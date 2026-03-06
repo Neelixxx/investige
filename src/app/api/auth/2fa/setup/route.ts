@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
   }
 
   const secret = createTotpSecret();
-  const otpauthUrl = buildOtpAuthUri({ userEmail, secret, issuer: "Gem Index" });
+  const otpauthUrl = buildOtpAuthUri({ userEmail, secret, issuer: "Investige" });
   const qr = await qrDataUrl(otpauthUrl);
 
   await withDbMutation((db) => {

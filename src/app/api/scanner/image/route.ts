@@ -10,9 +10,11 @@ import {
   extractBarcodeLikeTokens,
   findCardFromScan,
   findSealedDetailsFromScan,
+  findSealedProductCandidatesFromScan,
   findSetFromScan,
   findSlabDetailsFromScan,
 } from "@/lib/scan";
+import { ensureSealedProductRecord, matchSealedProduct } from "@/lib/sealed-products";
 import {
   cardWithSet,
   enrichCollection,
@@ -20,12 +22,16 @@ import {
   enrichSealedWishlist,
   enrichWishlist,
 } from "@/lib/selectors";
-import type { CardCondition } from "@/lib/types";
+import type { CardCondition, RawCardCondition } from "@/lib/types";
 
 export const runtime = "nodejs";
 
 type ScanIntent = "COLLECTION" | "WISHLIST" | "PRICE_CHECK";
 type ScanItemKind = "RAW_CARD" | "GRADED_SLAB" | "SEALED_PRODUCT" | "UNKNOWN";
+
+function normalizeRawCondition(condition?: RawCardCondition): RawCardCondition {
+  return condition ?? "NM";
+}
 
 function parseIntent(input: FormDataEntryValue | null): ScanIntent {
   const value = (typeof input === "string" ? input : "").toUpperCase();
@@ -52,6 +58,11 @@ function parseTargetPrice(input: FormDataEntryValue | null): number | undefined 
     return undefined;
   }
   return raw;
+}
+
+function parsePreviewOnly(input: FormDataEntryValue | null): boolean {
+  const value = (typeof input === "string" ? input : "").trim().toLowerCase();
+  return value === "1" || value === "true" || value === "yes";
 }
 
 function latestConditionPrice(
@@ -89,6 +100,7 @@ export async function POST(request: NextRequest) {
   const destination = parseIntent(formData.get("destination"));
   const quantity = parseQuantity(formData.get("quantity"));
   const targetPriceUsd = parseTargetPrice(formData.get("targetPriceUsd"));
+  const previewOnly = parsePreviewOnly(formData.get("previewOnly"));
   if (destination !== "PRICE_CHECK" && !hasFeature(user, "PORTFOLIO_TRACKING")) {
     return NextResponse.json(
       { error: featureErrorMessage(user, "PORTFOLIO_TRACKING") },
@@ -104,14 +116,27 @@ export async function POST(request: NextRequest) {
   const cardMatch = findCardFromScan(snapshot, ocr.text);
   const slab = findSlabDetailsFromScan(ocr.text);
   const sealed = findSealedDetailsFromScan(ocr.text, barcodeValue);
+  const sealedCandidates = findSealedProductCandidatesFromScan(snapshot, ocr.text, barcodeValue);
+  const primarySealedCandidate = sealedCandidates[0]?.product ?? null;
   const setMatchByText = findSetFromScan(snapshot, ocr.text);
   const resolvedSet =
     (setMatchByText
       ? snapshot.sets.find((entry) => entry.id === setMatchByText.id)
       : undefined) ??
+    (primarySealedCandidate
+      ? snapshot.sets.find((entry) => entry.id === primarySealedCandidate.setId)
+      : undefined) ??
     (sealed?.setCode ? snapshot.sets.find((entry) => entry.code === sealed.setCode) : undefined);
   const setMatch = setMatchByText
     ? setMatchByText
+    : primarySealedCandidate && resolvedSet
+      ? {
+          id: resolvedSet.id,
+          code: resolvedSet.code,
+          name: resolvedSet.name,
+          confidence: sealedCandidates[0]?.confidence ?? 0.8,
+          reason: sealedCandidates[0]?.reason ?? "Matched sealed product catalog",
+        }
     : resolvedSet
       ? {
           id: resolvedSet.id,
@@ -123,7 +148,7 @@ export async function POST(request: NextRequest) {
       : null;
 
   const isGradedHint = Boolean(slab.grader || slab.grade || slab.templateId);
-  const itemKind: ScanItemKind = sealed
+  const itemKind: ScanItemKind = primarySealedCandidate || sealed
     ? "SEALED_PRODUCT"
     : cardMatch && isGradedHint
       ? "GRADED_SLAB"
@@ -141,13 +166,14 @@ export async function POST(request: NextRequest) {
       createdAt: new Date().toISOString(),
     });
 
-    if (destination === "PRICE_CHECK") {
+    if (previewOnly || destination === "PRICE_CHECK") {
       return;
     }
 
     if ((itemKind === "RAW_CARD" || itemKind === "GRADED_SLAB") && cardMatch) {
       if (destination === "COLLECTION") {
         const ownershipType = itemKind === "GRADED_SLAB" ? "GRADED" : "RAW";
+        const rawCondition = ownershipType === "RAW" ? normalizeRawCondition() : undefined;
         const grader = ownershipType === "GRADED" ? slab.grader : undefined;
         const grade = ownershipType === "GRADED" ? slab.grade : undefined;
         const existing = db.collectionItems.find(
@@ -155,18 +181,25 @@ export async function POST(request: NextRequest) {
             item.userId === user.id &&
             item.cardId === cardMatch.card.id &&
             item.ownershipType === ownershipType &&
+            (ownershipType === "RAW"
+              ? normalizeRawCondition(item.rawCondition) === rawCondition
+              : true) &&
             (item.grader ?? null) === (grader ?? null) &&
             (item.grade ?? null) === (grade ?? null),
         );
 
         if (existing) {
           existing.quantity += quantity;
+          if (ownershipType === "RAW") {
+            existing.rawCondition = rawCondition;
+          }
         } else {
           db.collectionItems.push({
             id: nextId("collection"),
             userId: user.id,
             cardId: cardMatch.card.id,
             ownershipType,
+            rawCondition,
             grader,
             grade,
             quantity,
@@ -195,13 +228,36 @@ export async function POST(request: NextRequest) {
       return;
     }
 
-    if (itemKind === "SEALED_PRODUCT" && resolvedSet && sealed) {
+    if (itemKind === "SEALED_PRODUCT") {
+      const product =
+        (primarySealedCandidate
+          ? matchSealedProduct(db, { productId: primarySealedCandidate.id })
+          : null) ??
+        (resolvedSet && sealed
+          ? matchSealedProduct(db, {
+              upc: barcodeValue,
+              setId: resolvedSet.id,
+              productName: sealed.productName,
+              productType: sealed.productType,
+            })
+          : null) ??
+        (resolvedSet && sealed
+          ? ensureSealedProductRecord(db, {
+              setId: resolvedSet.id,
+              productName: sealed.productName,
+              productType: sealed.productType,
+              upc: barcodeValue,
+              source: "SCANNER",
+            })
+          : null);
+
+      if (!product) {
+        return;
+      }
+
       if (destination === "COLLECTION") {
         const existing = db.sealedInventoryItems.find(
-          (item) =>
-            item.userId === user.id &&
-            item.setId === resolvedSet.id &&
-            item.productName.toLowerCase() === sealed.productName.toLowerCase(),
+          (item) => item.userId === user.id && item.productId === product.id,
         );
 
         if (existing) {
@@ -210,9 +266,10 @@ export async function POST(request: NextRequest) {
           db.sealedInventoryItems.push({
             id: nextId("sealed"),
             userId: user.id,
-            setId: resolvedSet.id,
-            productName: sealed.productName,
-            productType: sealed.productType,
+            productId: product.id,
+            setId: product.setId,
+            productName: product.productName,
+            productType: product.productType,
             quantity,
             acquiredAt: new Date().toISOString(),
             notes: "Added by image scanner",
@@ -220,10 +277,7 @@ export async function POST(request: NextRequest) {
         }
       } else if (destination === "WISHLIST") {
         const existing = db.sealedWishlistItems.find(
-          (item) =>
-            item.userId === user.id &&
-            item.setId === resolvedSet.id &&
-            item.productName.toLowerCase() === sealed.productName.toLowerCase(),
+          (item) => item.userId === user.id && item.productId === product.id,
         );
         if (existing) {
           existing.targetPriceUsd = targetPriceUsd ?? existing.targetPriceUsd;
@@ -232,9 +286,10 @@ export async function POST(request: NextRequest) {
           db.sealedWishlistItems.push({
             id: nextId("sealed_wishlist"),
             userId: user.id,
-            setId: resolvedSet.id,
-            productName: sealed.productName,
-            productType: sealed.productType,
+            productId: product.id,
+            setId: product.setId,
+            productName: product.productName,
+            productType: product.productType,
             targetPriceUsd,
             priority: 2,
             createdAt: new Date().toISOString(),
@@ -252,21 +307,48 @@ export async function POST(request: NextRequest) {
   const setMetric = resolvedSet
     ? setMetrics(db).find((entry) => entry.setId === resolvedSet.id)
     : undefined;
+  const resolvedSealedProduct =
+    primarySealedCandidate
+      ? matchSealedProduct(db, { productId: primarySealedCandidate.id })
+      : resolvedSet && sealed
+        ? matchSealedProduct(db, {
+            upc: barcodeValue,
+            setId: resolvedSet.id,
+            productName: sealed.productName,
+            productType: sealed.productType,
+          })
+        : null;
   const estimatedSealedPrice =
-    itemKind === "SEALED_PRODUCT" && resolvedSet && sealed
-      ? db.sealedInventoryItems
-          .filter(
-            (entry) =>
-              entry.setId === resolvedSet.id &&
-              entry.productType === sealed.productType &&
-              typeof entry.estimatedValueUsd === "number",
-          )
-          .map((entry) => entry.estimatedValueUsd as number)
-          .reduce((sum, value, _, all) => sum + value / all.length, 0)
+    itemKind === "SEALED_PRODUCT"
+      ? (() => {
+          const matchedProduct =
+            resolvedSealedProduct ??
+            (resolvedSet && sealed
+              ? matchSealedProduct(db, {
+                  upc: barcodeValue,
+                  setId: resolvedSet.id,
+                  productName: sealed.productName,
+                  productType: sealed.productType,
+                })
+              : null);
+          if (typeof matchedProduct?.marketValueUsd === "number" && matchedProduct.marketValueUsd > 0) {
+            return matchedProduct.marketValueUsd;
+          }
+
+          return db.sealedInventoryItems
+            .filter(
+              (entry) =>
+                entry.productId === matchedProduct?.id &&
+                typeof entry.estimatedValueUsd === "number",
+            )
+            .map((entry) => entry.estimatedValueUsd as number)
+            .reduce((sum, value, _, all) => sum + value / all.length, 0);
+        })()
       : 0;
 
   return NextResponse.json({
     destination,
+    actionPreview: previewOnly,
     itemKind,
     ocr,
     barcode: barcodeValue
@@ -278,7 +360,54 @@ export async function POST(request: NextRequest) {
       : null,
     barcodeCandidates: barcodes,
     slab,
-    sealed,
+    sealedCandidates: sealedCandidates.map((entry) => {
+      const set = db.sets.find((item) => item.id === entry.product.setId);
+      return {
+        id: entry.product.id,
+        productId: entry.product.id,
+        productName: entry.product.productName,
+        productType: entry.product.productType,
+        imageUrl: entry.product.imageUrl,
+        releaseDate: entry.product.releaseDate,
+        upc: entry.product.upc,
+        marketValueUsd: entry.product.marketValueUsd,
+        setId: entry.product.setId,
+        setCode: set?.code,
+        setName: set?.name,
+        confidence: entry.confidence,
+        reason: entry.reason,
+        viaBarcode: entry.viaBarcode,
+      };
+    }),
+    sealed: sealed
+      ? {
+          ...sealed,
+          productId: resolvedSealedProduct?.id,
+          setId: resolvedSealedProduct?.setId ?? resolvedSet?.id,
+          setName: resolvedSet?.name,
+          setCode: resolvedSet?.code ?? sealed.setCode,
+          imageUrl: resolvedSealedProduct?.imageUrl,
+          releaseDate: resolvedSealedProduct?.releaseDate,
+          upc: resolvedSealedProduct?.upc,
+          marketValueUsd: resolvedSealedProduct?.marketValueUsd,
+        }
+      : resolvedSealedProduct
+        ? {
+            productName: resolvedSealedProduct.productName,
+            productType: resolvedSealedProduct.productType,
+            confidence: sealedCandidates[0]?.confidence,
+            templateId: "catalog-match",
+            barcode: barcodeValue,
+            productId: resolvedSealedProduct.id,
+            setId: resolvedSealedProduct.setId,
+            setName: resolvedSet?.name,
+            setCode: resolvedSet?.code,
+            imageUrl: resolvedSealedProduct.imageUrl,
+            releaseDate: resolvedSealedProduct.releaseDate,
+            upc: resolvedSealedProduct.upc,
+            marketValueUsd: resolvedSealedProduct.marketValueUsd,
+          }
+      : null,
     match: cardMatch
       ? {
           ...cardMatch,

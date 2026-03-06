@@ -17,14 +17,14 @@ function getResend(): Resend | null {
 }
 
 function fromAddress(): string {
-  return process.env.EMAIL_FROM ?? "Gem Index <no-reply@gemindex.local>";
+  return process.env.EMAIL_FROM ?? "Investige <no-reply@gemindex.local>";
 }
 
 export async function queueEmail(params: {
   userId?: string;
   to: string;
   subject: string;
-  template: "VERIFY_EMAIL" | "PASSWORD_RESET";
+  template: "VERIFY_EMAIL" | "PASSWORD_RESET" | "USERNAME_RECOVERY";
   body: string;
 }): Promise<void> {
   const id = nextId("mail");

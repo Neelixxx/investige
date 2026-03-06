@@ -65,6 +65,7 @@ async function finishTask(taskId: string, result: Record<string, number>): Promi
     }
     row.status = "COMPLETED";
     row.finishedAt = new Date().toISOString();
+    row.result = result;
     row.resultSummary = summarize(result);
   });
 }
@@ -118,6 +119,7 @@ async function runScheduledJob(job: SyncJobRecord): Promise<void> {
         createdAt: row.lastRunAt ?? now.toISOString(),
         startedAt: row.lastRunAt ?? now.toISOString(),
         finishedAt: now.toISOString(),
+        result,
         resultSummary: summarize(result),
       });
       db.syncTasks = db.syncTasks.slice(-500);

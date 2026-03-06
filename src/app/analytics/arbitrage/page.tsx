@@ -6,6 +6,14 @@ import { AnalyticsNav } from "@/components/analytics-nav";
 
 export const dynamic = "force-dynamic";
 
+function formatPercent(value: number, digits = 2): string {
+  const rounded = Number(value.toFixed(digits));
+  if (rounded === 100) {
+    return "100%";
+  }
+  return `${rounded.toFixed(digits)}%`;
+}
+
 export default async function ArbitragePage() {
   await requireServerFeature("ADVANCED_ANALYTICS");
   const db = await readDb();
@@ -33,7 +41,7 @@ export default async function ArbitragePage() {
                 <span>{item.cardLabel}</span>
                 <span>${item.rawPrice.toFixed(2)}</span>
                 <span>${item.psa10Price.toFixed(2)}</span>
-                <span>{item.gemRatePsa.toFixed(2)}%</span>
+                <span>{formatPercent(item.gemRatePsa)}</span>
                 <span className={item.gradingArbitrageUsd >= 0 ? "text-emerald-700" : "text-rose-700"}>
                   ${item.gradingArbitrageUsd.toFixed(2)}
                 </span>

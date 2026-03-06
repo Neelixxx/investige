@@ -4,15 +4,23 @@ function uniqueEmail(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@gemindex.local`;
 }
 
+function uniqueUsername(prefix: string): string {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`.toLowerCase();
+}
+
 test("register, verify email, upgrade plan, and update portfolio", async ({ page }) => {
   const email = uniqueEmail("e2e-portfolio");
+  const username = uniqueUsername("portfolio");
   const password = "Passw0rd!123";
 
   const registerRes = await page.request.post("/api/auth/register", {
     data: {
-      name: "E2E Portfolio User",
+      firstName: "E2E",
+      lastName: "Portfolio User",
+      username,
       email,
       password,
+      passwordConfirm: password,
     },
   });
   expect(registerRes.status()).toBe(201);
@@ -89,18 +97,28 @@ test("register, verify email, upgrade plan, and update portfolio", async ({ page
 
   await page.goto("/");
   await expect(page.getByTestId("plan-badge")).toContainText("PRO");
+
+  // verify that the portfolio performance page shows separate raw and graded metrics
+  await page.getByRole("link", { name: "Portfolio" }).click();
+  await expect(page.getByRole("heading", { name: "Portfolio Performance" })).toBeVisible();
+  await expect(page.locator("text=Raw Collection MV")).toBeVisible();
+  await expect(page.locator("text=Graded Collection MV")).toBeVisible();
 });
 
 test("password reset flow rotates credentials", async ({ page }) => {
   const email = uniqueEmail("e2e-reset");
+  const username = uniqueUsername("reset");
   const password = "ResetOld!123";
   const newPassword = "ResetNew!123";
 
   const registerRes = await page.request.post("/api/auth/register", {
     data: {
-      name: "E2E Reset User",
+      firstName: "E2E",
+      lastName: "Reset User",
+      username,
       email,
       password,
+      passwordConfirm: password,
     },
   });
   expect(registerRes.status()).toBe(201);

@@ -1,4 +1,10 @@
-import type { CardRecord, GemIndexDatabase, Grader, SealedInventoryRecord } from "./types";
+import type {
+  CardRecord,
+  GemIndexDatabase,
+  Grader,
+  SealedInventoryRecord,
+  SealedProductRecord,
+} from "./types";
 import {
   extractBarcodeLikeTokens as extractBarcodeLikeTokensFromTemplates,
   matchSealedBarcodeTemplate,
@@ -37,6 +43,13 @@ export interface SealedScanDetails {
   setCode?: string;
 }
 
+export interface SealedProductScanMatch {
+  product: SealedProductRecord;
+  confidence: number;
+  reason: string;
+  viaBarcode: boolean;
+}
+
 function normalize(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
@@ -48,6 +61,77 @@ function tokenOverlapScore(text: string, target: string): number {
   }
   const hits = tokens.filter((token) => text.includes(token)).length;
   return hits / tokens.length;
+}
+
+function compactDigits(value: string | undefined): string {
+  return (value ?? "").replace(/\D+/g, "");
+}
+
+function normalizeProductType(value: SealedInventoryRecord["productType"]): string {
+  return value.replace(/_/g, " ").toLowerCase();
+}
+
+export function findSealedProductCandidatesFromScan(
+  db: GemIndexDatabase,
+  scannedText: string,
+  barcode?: string,
+): SealedProductScanMatch[] {
+  const clean = normalize(scannedText);
+  const barcodeToken = compactDigits(barcode ?? extractBarcodeLikeTokensFromTemplates(scannedText)[0]);
+  const setById = new Map(db.sets.map((set) => [set.id, set]));
+
+  const ranked = db.sealedProducts
+    .map((product) => {
+      const productUpc = compactDigits(product.upc);
+      const barcodeMatched = Boolean(barcodeToken && productUpc && barcodeToken === productUpc);
+      if (barcodeMatched) {
+        return {
+          product,
+          confidence: 0.99,
+          reason: `Exact UPC match ${product.upc}`,
+          viaBarcode: true,
+        } satisfies SealedProductScanMatch;
+      }
+
+      if (!clean) {
+        return null;
+      }
+
+      const set = setById.get(product.setId);
+      const exactNameMatch = clean.includes(normalize(product.productName));
+      const nameScore = exactNameMatch ? 0.72 : tokenOverlapScore(clean, product.productName) * 0.7;
+      const typeScore = clean.includes(normalizeProductType(product.productType))
+        ? 0.12
+        : tokenOverlapScore(clean, normalizeProductType(product.productType)) * 0.1;
+      const setCodeScore = set && clean.includes(normalize(set.code)) ? 0.2 : 0;
+      const setNameScore = set ? tokenOverlapScore(clean, set.name) * 0.18 : 0;
+      const confidence = Math.min(0.97, nameScore + typeScore + setCodeScore + setNameScore);
+
+      if (confidence < 0.45) {
+        return null;
+      }
+
+      const reasons = [
+        exactNameMatch
+          ? `Matched sealed label ${product.productName}`
+          : `Name overlap ${(nameScore * 100).toFixed(0)}%`,
+        setCodeScore > 0 ? `set code ${set?.code}` : undefined,
+        setNameScore >= 0.08 ? `set ${(setNameScore * 100).toFixed(0)}%` : undefined,
+      ]
+        .filter(Boolean)
+        .join(" | ");
+
+      return {
+        product,
+        confidence,
+        reason: reasons || "Template match",
+        viaBarcode: false,
+      } satisfies SealedProductScanMatch;
+    })
+    .filter((entry): entry is SealedProductScanMatch => Boolean(entry))
+    .sort((a, b) => b.confidence - a.confidence || a.product.productName.localeCompare(b.product.productName));
+
+  return ranked.slice(0, 6);
 }
 
 export function findSetFromScan(db: GemIndexDatabase, scannedText: string): SetScanMatch | null {

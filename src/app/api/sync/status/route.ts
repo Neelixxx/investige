@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { readDb } from "@/lib/db";
 import { featureSnapshot, subscriptionStatus, subscriptionTier } from "@/lib/entitlements";
+import { sealedSalesFeedStatus } from "@/lib/providers/sealed-sales";
 import { ensureSchedulerStarted } from "@/lib/scheduler";
 
 export const runtime = "nodejs";
@@ -19,8 +20,17 @@ export async function GET(request: NextRequest) {
   ensureSchedulerStarted();
 
   const db = await readDb();
+  const sealedFeed = sealedSalesFeedStatus();
   return NextResponse.json({
     sync: db.sync,
+    sealedFeed: {
+      configured: sealedFeed.configured,
+      mode: sealedFeed.mode,
+      target: sealedFeed.target,
+      lastImportedCount: db.sync.lastSealedSalesUpserted ?? 0,
+      lastSalesSyncAt: db.sync.lastSalesSyncAt,
+      lastRunIncludedFeed: Boolean(db.sync.lastSalesProviders?.includes("SEALED_EXTERNAL")),
+    },
     totals: {
       sets: db.sets.length,
       cards: db.cards.length,

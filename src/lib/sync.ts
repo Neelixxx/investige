@@ -1,7 +1,17 @@
 import { nextId, withDbMutation } from "./db";
+import { fetchLivePopulationReports } from "./providers/populations";
 import { fetchLiveCards, fetchLiveSets } from "./providers/pokemon-tcg";
+import { fetchLiveSealedSales } from "./providers/sealed-sales";
 import { syncDirectTcgplayerPrices } from "./providers/tcgplayer-direct";
-import type { CardRecord, GemIndexDatabase, PokemonSetRecord, SaleRecord, SyncJobType } from "./types";
+import { upsertSealedSale } from "./sealed-sales";
+import type {
+  CardRecord,
+  GemIndexDatabase,
+  PokemonSetRecord,
+  PopulationReportRecord,
+  SaleRecord,
+  SyncJobType,
+} from "./types";
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
@@ -161,15 +171,97 @@ function upsertSale(db: GemIndexDatabase, sale: SaleRecord): void {
   db.sales.push(sale);
 }
 
+function normalizeLookup(value: string | undefined): string {
+  return (value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function resolveCardForPopulation(
+  db: GemIndexDatabase,
+  payload: {
+    cardExternalId?: string;
+    setCode?: string;
+    cardNumber?: string;
+    cardName?: string;
+  },
+): CardRecord | null {
+  if (payload.cardExternalId) {
+    const byExternal = db.cards.find((card) => card.externalId === payload.cardExternalId);
+    if (byExternal) {
+      return byExternal;
+    }
+  }
+
+  const targetSetCode = normalizeLookup(payload.setCode);
+  const targetCardNumber = normalizeLookup(payload.cardNumber);
+  const targetCardName = normalizeLookup(payload.cardName);
+
+  if (!targetSetCode && !targetCardNumber && !targetCardName) {
+    return null;
+  }
+
+  return (
+    db.cards.find((card) => {
+      const set = db.sets.find((entry) => entry.id === card.setId);
+      const setMatches = !targetSetCode || normalizeLookup(set?.code) === targetSetCode;
+      const numberMatches = !targetCardNumber || normalizeLookup(card.cardNumber) === targetCardNumber;
+      const nameMatches = !targetCardName || normalizeLookup(card.name) === targetCardName;
+      return setMatches && numberMatches && nameMatches;
+    }) ?? null
+  );
+}
+
+function upsertPopulation(
+  db: GemIndexDatabase,
+  payload: {
+    cardId: string;
+    grader: "PSA" | "TAG";
+    totalGraded: number;
+    grade10: number;
+    asOfDate: string;
+  },
+): PopulationReportRecord {
+  const existing = db.populationReports.find(
+    (entry) =>
+      entry.cardId === payload.cardId &&
+      entry.grader === payload.grader &&
+      entry.source === payload.grader,
+  );
+
+  if (existing) {
+    existing.totalGraded = payload.totalGraded;
+    existing.grade10 = payload.grade10;
+    existing.asOfDate = payload.asOfDate;
+    existing.source = payload.grader;
+    return existing;
+  }
+
+  const created: PopulationReportRecord = {
+    id: nextId("pop"),
+    cardId: payload.cardId,
+    grader: payload.grader,
+    totalGraded: payload.totalGraded,
+    grade10: payload.grade10,
+    asOfDate: payload.asOfDate,
+    source: payload.grader,
+  };
+
+  db.populationReports.push(created);
+  return created;
+}
+
 export async function syncLiveCatalog(options?: { pageLimit?: number }): Promise<{
   setsUpserted: number;
   cardsUpserted: number;
   tcgplayerSalesUpserted: number;
   cardmarketSalesUpserted: number;
+  populationReportsUpserted: number;
+  psaPopulationReportsUpserted: number;
+  tagPopulationReportsUpserted: number;
 }> {
-  const [liveSets, liveCards] = await Promise.all([
+  const [liveSets, liveCards, livePopulationReports] = await Promise.all([
     fetchLiveSets(),
     fetchLiveCards(options?.pageLimit),
+    fetchLivePopulationReports(),
   ]);
 
   const eurToUsd = resolveEurToUsdRate();
@@ -184,6 +276,9 @@ export async function syncLiveCatalog(options?: { pageLimit?: number }): Promise
 
     let tcgplayerSalesUpserted = 0;
     let cardmarketSalesUpserted = 0;
+    let populationReportsUpserted = 0;
+    let psaPopulationReportsUpserted = 0;
+    let tagPopulationReportsUpserted = 0;
 
     liveCards.forEach((liveCard) => {
       const setId = setIdByExternal.get(liveCard.setExternalId);
@@ -238,6 +333,27 @@ export async function syncLiveCatalog(options?: { pageLimit?: number }): Promise
       }
     });
 
+    livePopulationReports.forEach((report) => {
+      const card = resolveCardForPopulation(db, report);
+      if (!card) {
+        return;
+      }
+
+      upsertPopulation(db, {
+        cardId: card.id,
+        grader: report.grader,
+        totalGraded: report.totalGraded,
+        grade10: report.grade10,
+        asOfDate: report.asOfDate,
+      });
+      populationReportsUpserted += 1;
+      if (report.grader === "PSA") {
+        psaPopulationReportsUpserted += 1;
+      } else {
+        tagPopulationReportsUpserted += 1;
+      }
+    });
+
     db.sync.lastCatalogSyncAt = new Date().toISOString();
     db.sync.lastCatalogProvider = "PokemonTCG API";
     db.sync.lastSalesProviders = ["POKEMONTCG_TCGPLAYER", "POKEMONTCG_CARDMARKET"];
@@ -249,6 +365,9 @@ export async function syncLiveCatalog(options?: { pageLimit?: number }): Promise
       cardsUpserted: liveCards.length,
       tcgplayerSalesUpserted,
       cardmarketSalesUpserted,
+      populationReportsUpserted,
+      psaPopulationReportsUpserted,
+      tagPopulationReportsUpserted,
     };
   });
 }
@@ -257,8 +376,12 @@ export async function syncLiveSalesOnly(options?: { pageLimit?: number }): Promi
   cardsProcessed: number;
   tcgplayerSalesUpserted: number;
   cardmarketSalesUpserted: number;
+  sealedSalesUpserted: number;
 }> {
-  const liveCards = await fetchLiveCards(options?.pageLimit);
+  const [liveCards, liveSealedSales] = await Promise.all([
+    fetchLiveCards(options?.pageLimit),
+    fetchLiveSealedSales(),
+  ]);
   const eurToUsd = resolveEurToUsdRate();
 
   return withDbMutation((db) => {
@@ -266,6 +389,7 @@ export async function syncLiveSalesOnly(options?: { pageLimit?: number }): Promi
 
     let tcgplayerSalesUpserted = 0;
     let cardmarketSalesUpserted = 0;
+    let sealedSalesUpserted = 0;
 
     liveCards.forEach((liveCard) => {
       const card = cardByExternal.get(liveCard.externalId);
@@ -306,14 +430,32 @@ export async function syncLiveSalesOnly(options?: { pageLimit?: number }): Promi
       }
     });
 
+    liveSealedSales.forEach((sale) => {
+      const result = upsertSealedSale(db, {
+        ...sale,
+        source: sale.source ?? "external-sealed-feed",
+        provider: "INGESTED",
+        currency: sale.currency ?? "USD",
+      });
+      if (result.inserted) {
+        sealedSalesUpserted += 1;
+      }
+    });
+
     db.sync.lastSalesSyncAt = new Date().toISOString();
-    db.sync.lastSalesProviders = ["POKEMONTCG_TCGPLAYER", "POKEMONTCG_CARDMARKET"];
+    db.sync.lastSalesProviders = [
+      "POKEMONTCG_TCGPLAYER",
+      "POKEMONTCG_CARDMARKET",
+      ...(liveSealedSales.length ? ["SEALED_EXTERNAL"] : []),
+    ];
+    db.sync.lastSealedSalesUpserted = sealedSalesUpserted;
     db.sync.lastError = undefined;
 
     return {
       cardsProcessed: liveCards.length,
       tcgplayerSalesUpserted,
       cardmarketSalesUpserted,
+      sealedSalesUpserted,
     };
   });
 }

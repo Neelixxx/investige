@@ -10,10 +10,15 @@ import { verifyTotpToken } from "@/lib/totp";
 export const runtime = "nodejs";
 
 const loginSchema = z.object({
-  email: z.string().email(),
+  identifier: z.string().min(3).max(160).optional(),
+  username: z.string().min(3).max(160).optional(),
+  email: z.string().email().max(160).optional(),
   password: z.string().min(1),
   otp: z.string().length(6).optional(),
-});
+}).refine(
+  (value) => Boolean(value.identifier?.trim() || value.username?.trim() || value.email?.trim()),
+  { message: "Username or email is required.", path: ["identifier"] },
+);
 
 function requireEmailVerification(): boolean {
   const allowUnverified =
@@ -39,10 +44,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: parse.error.flatten() }, { status: 400 });
   }
 
-  const email = parse.data.email.trim().toLowerCase();
+  const rawIdentifier =
+    parse.data.identifier?.trim() || parse.data.username?.trim() || parse.data.email?.trim() || "";
+  const normalizedIdentifier = rawIdentifier.toLowerCase();
   const ip = request.headers.get("x-forwarded-for") ?? "unknown";
   const rl = checkRateLimit({
-    key: `login:${ip}:${email}`,
+    key: `login:${ip}:${normalizedIdentifier}`,
     limit: 8,
     windowMs: 15 * 60_000,
   });
@@ -54,15 +61,19 @@ export async function POST(request: NextRequest) {
   }
 
   const db = await readDb();
-  const user = db.users.find((entry) => entry.email.toLowerCase() === email);
+  const user = db.users.find(
+    (entry) =>
+      entry.email.toLowerCase() === normalizedIdentifier ||
+      entry.username.toLowerCase() === normalizedIdentifier,
+  );
 
   if (!user) {
-    return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
+    return NextResponse.json({ error: "Invalid username/email or password." }, { status: 401 });
   }
 
   const isValid = await verifyPassword(parse.data.password, user.passwordHash);
   if (!isValid) {
-    return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
+    return NextResponse.json({ error: "Invalid username/email or password." }, { status: 401 });
   }
 
   if (!user.emailVerified) {

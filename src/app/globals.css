@@ -3,21 +3,14 @@
 :root {
   --background: #142a57;
   --foreground: #e8eefc;
+  --font-body: var(--font-brandink);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-space-grotesk);
-  --font-serif: var(--font-source-serif);
-}
-
-@font-face {
-  font-family: "Chailce Noggin";
-  src: url("/fonts/ChailceNogginRegular-2OXoW.ttf") format("truetype");
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
+  --font-sans: var(--font-body);
+  --font-serif: var(--font-brandink-display);
 }
 
 * {
@@ -37,15 +30,61 @@ body {
     radial-gradient(circle at 58% 54%, rgba(35, 123, 240, 0.2) 0%, transparent 42%),
     linear-gradient(160deg, #182f61 0%, #0f2551 45%, #0b1f45 100%);
   color: var(--foreground);
-  font-family: var(--font-space-grotesk), sans-serif;
+  font-family: var(--font-body);
 }
 
-h1,
+h1 {
+  font-family: var(--font-brandink-display), serif;
+}
+
 h2,
 h3 {
-  font-family: var(--font-source-serif), serif;
+  font-family: var(--font-body);
 }
 
 .gem-title {
-  font-family: "Chailce Noggin", var(--font-source-serif), serif;
+  font-family: var(--font-brandink-display), serif;
 }
+
+.gem-title-glow {
+  text-shadow:
+    0 0 8px rgba(120, 220, 255, 0.55),
+    0 0 18px rgba(72, 162, 255, 0.45),
+    0 0 32px rgba(44, 108, 255, 0.28);
+}
+
+.gem-title-landing {
+  text-transform: none;
+}
+
+.metric-display {
+  font-family: var(--font-brandink-display), serif;
+}
+
+.section-panel {
+  background:
+    linear-gradient(180deg, rgba(11, 23, 54, 0.72), rgba(8, 18, 44, 0.68));
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 12px 28px rgba(2, 6, 23, 0.18);
+}
+
+.section-panel-soft {
+  background:
+    linear-gradient(180deg, rgba(18, 35, 72, 0.6), rgba(11, 24, 54, 0.56));
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 10px 22px rgba(2, 6, 23, 0.14);
+}
+
+.section-panel-deep {
+  background:
+    linear-gradient(180deg, rgba(4, 10, 28, 0.82), rgba(2, 8, 22, 0.78));
+  border: 1px solid rgba(56, 189, 248, 0.12);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 14px 30px rgba(2, 6, 23, 0.24);
+}
+

@@ -4,7 +4,11 @@ import type {
   PopulationReportRecord,
   PokemonSetRecord,
   SaleRecord,
+  SealedProductRecord,
+  SealedSaleRecord,
+  SealedSetMarketSnapshotRecord,
 } from "./types";
+import { createSealedProductImageDataUrl, createSealedProductId } from "./sealed-products";
 
 const MONTHS = [
   "2025-03-01",
@@ -406,13 +410,234 @@ function buildCatalog(): {
   return { sets, cards, populations, sales };
 }
 
+function buildSealedProductCatalog(sets: PokemonSetRecord[]): SealedProductRecord[] {
+  const byCode = new Map(sets.map((set) => [set.code, set]));
+  const seedProducts = [
+    {
+      setCode: "swsh7",
+      productName: "Evolving Skies Booster Box",
+      productType: "BOOSTER_BOX" as const,
+      releaseDate: "2021-08-27",
+      marketValueUsd: 730,
+      upc: "820650808885",
+    },
+    {
+      setCode: "swsh7",
+      productName: "Evolving Skies ETB",
+      legacyIdName: "Evolving Skies Elite Trainer Box",
+      productType: "ELITE_TRAINER_BOX" as const,
+      releaseDate: "2021-08-27",
+      marketValueUsd: 165,
+      upc: "820650808908",
+    },
+    {
+      setCode: "swsh12pt5",
+      productName: "Crown Zenith ETB",
+      legacyIdName: "Crown Zenith Elite Trainer Box",
+      productType: "ELITE_TRAINER_BOX" as const,
+      releaseDate: "2023-01-20",
+      marketValueUsd: 56,
+      upc: "820650853625",
+    },
+    {
+      setCode: "sv4pt5",
+      productName: "Paldean Fates ETB",
+      legacyIdName: "Paldean Fates Elite Trainer Box",
+      productType: "ELITE_TRAINER_BOX" as const,
+      releaseDate: "2024-01-26",
+      marketValueUsd: 62,
+      upc: "820650857944",
+    },
+    {
+      setCode: "sm115",
+      productName: "Hidden Fates Charizard Tin",
+      productType: "TIN" as const,
+      releaseDate: "2019-08-23",
+      marketValueUsd: 88,
+      upc: "820650804443",
+    },
+  ];
+
+  return seedProducts.flatMap((product) => {
+    const set = byCode.get(product.setCode);
+    if (!set) {
+      return [];
+    }
+
+    return [
+      {
+        id: createSealedProductId(
+          set.id,
+          product.productType,
+          product.legacyIdName ?? product.productName,
+        ),
+        setId: set.id,
+        productName: product.productName,
+        productType: product.productType,
+        imageUrl: createSealedProductImageDataUrl(product.productName, set.code, product.productType),
+        releaseDate: product.releaseDate,
+        marketValueUsd: product.marketValueUsd,
+        upc: product.upc,
+        source: "SEED" as const,
+      } satisfies SealedProductRecord,
+    ];
+  });
+}
+
+function sealedProductTrendRate(productType: SealedProductRecord["productType"]): number {
+  switch (productType) {
+    case "BOOSTER_BOX":
+      return 0.05;
+    case "ELITE_TRAINER_BOX":
+      return 0.035;
+    case "COLLECTION_BOX":
+      return 0.03;
+    case "TIN":
+      return 0.025;
+    case "BLISTER":
+      return 0.02;
+    default:
+      return 0.028;
+  }
+}
+
+function buildSealedSales(products: SealedProductRecord[]): SealedSaleRecord[] {
+  const latestMonthIndex = MONTHS.length - 1;
+
+  return products.flatMap((product) => {
+    const anchor = product.marketValueUsd ?? 0;
+    if (!anchor) {
+      return [];
+    }
+
+    const releaseMonth = (product.releaseDate ?? "").slice(0, 7);
+    const startIndex = Math.max(
+      0,
+      MONTHS.findIndex((month) => month.startsWith(releaseMonth)),
+    );
+    const trendRate = sealedProductTrendRate(product.productType);
+    const out: SealedSaleRecord[] = [];
+
+    for (let monthIndex = startIndex; monthIndex < MONTHS.length; monthIndex += 1) {
+      const distanceFromLatest = latestMonthIndex - monthIndex;
+      const baseFactor = Math.max(0.62, 1 - trendRate * distanceFromLatest);
+      const volume = 1 + Math.floor(seededNoise(product.id, monthIndex) * 3);
+
+      for (let saleIndex = 0; saleIndex < volume; saleIndex += 1) {
+        const spread = 0.95 + seededNoise(`${product.id}-sealed`, monthIndex * 5 + saleIndex) * 0.11;
+        const saleDate = new Date(MONTHS[monthIndex]);
+        saleDate.setUTCDate(5 + saleIndex * 8);
+
+        out.push({
+          id: makeId("sealed_sale", `${product.id}-${MONTHS[monthIndex]}-${saleIndex}`),
+          productId: product.id,
+          priceUsd: roundUsd(anchor * baseFactor * spread),
+          saleDate: saleDate.toISOString(),
+          source: "seeded-sealed-market-feed",
+          provider: "SEED",
+          providerRef: `${product.id}:${saleDate.toISOString()}`,
+          currency: "USD",
+        });
+      }
+    }
+
+    return out;
+  });
+}
+
+function sealedListingBase(productType: SealedProductRecord["productType"]): number {
+  switch (productType) {
+    case "BOOSTER_BOX":
+      return 62;
+    case "ELITE_TRAINER_BOX":
+      return 96;
+    case "COLLECTION_BOX":
+      return 78;
+    case "TIN":
+      return 84;
+    case "BLISTER":
+      return 110;
+    default:
+      return 70;
+  }
+}
+
+function buildSealedSetMarketSnapshots(
+  sets: PokemonSetRecord[],
+  products: SealedProductRecord[],
+  sealedSales: SealedSaleRecord[],
+): SealedSetMarketSnapshotRecord[] {
+  const salesByProductMonth = new Map<string, number[]>();
+  sealedSales.forEach((sale) => {
+    const key = `${sale.productId}:${sale.saleDate.slice(0, 7)}`;
+    const bucket = salesByProductMonth.get(key) ?? [];
+    bucket.push(sale.priceUsd);
+    salesByProductMonth.set(key, bucket);
+  });
+
+  return sets.flatMap((set) => {
+    const setProducts = products.filter((product) => product.setId === set.id);
+    if (!setProducts.length) {
+      return [];
+    }
+
+    const firstReleaseMonth = [...setProducts]
+      .map((product) => (product.releaseDate ?? set.releaseDate).slice(0, 7))
+      .sort()[0];
+    const startIndex = Math.max(0, MONTHS.findIndex((month) => month.startsWith(firstReleaseMonth)));
+    const latestMonthIndex = MONTHS.length - 1;
+
+    return MONTHS.slice(startIndex).map((month, offset) => {
+      const monthIndex = startIndex + offset;
+      const activeProducts = setProducts.filter(
+        (product) => (product.releaseDate ?? set.releaseDate).slice(0, 7) <= month.slice(0, 7),
+      );
+      const monthlyPrices = activeProducts.flatMap((product) => {
+        const bucket = salesByProductMonth.get(`${product.id}:${month.slice(0, 7)}`) ?? [];
+        return bucket;
+      });
+      const marketValueUsd = roundUsd(
+        monthlyPrices.length
+          ? monthlyPrices.reduce((sum, price) => sum + price, 0) / monthlyPrices.length
+          : activeProducts.reduce((sum, product) => sum + (product.marketValueUsd ?? 0), 0) /
+              Math.max(1, activeProducts.length),
+      );
+      const listingBase = activeProducts.reduce(
+        (sum, product) => sum + sealedListingBase(product.productType),
+        0,
+      );
+      const distanceFromLatest = latestMonthIndex - monthIndex;
+      const ageFactor = Math.max(0.32, 1 - distanceFromLatest * 0.045);
+      const marketCompression = Math.max(0.58, 1 - Math.min(0.34, marketValueUsd / 1400));
+      const seasonality = 0.92 + seededNoise(`${set.id}-supply`, monthIndex) * 0.22;
+      const tcgplayerListings = Math.max(
+        4,
+        Math.round(listingBase * ageFactor * marketCompression * seasonality),
+      );
+
+      return {
+        id: makeId("sealed_set_market", `${set.id}-${month}`),
+        setId: set.id,
+        snapshotDate: `${month}T00:00:00.000Z`,
+        tcgplayerListings,
+        marketValueUsd,
+        source: "SEED",
+      } satisfies SealedSetMarketSnapshotRecord;
+    });
+  });
+}
+
 export function createSeedDatabase(): GemIndexDatabase {
   const { sets, cards, populations, sales } = buildCatalog();
+  const sealedProducts = buildSealedProductCatalog(sets);
+  const sealedSales = buildSealedSales(sealedProducts);
+  const sealedSetMarketSnapshots = buildSealedSetMarketSnapshots(sets, sealedProducts, sealedSales);
+  const sealedByName = new Map(sealedProducts.map((product) => [product.productName, product]));
 
   const now = "2026-02-01T00:00:00.000Z";
 
   return {
-    version: 4,
+    version: 8,
     sets,
     cards,
     populationReports: populations,
@@ -421,6 +646,7 @@ export function createSeedDatabase(): GemIndexDatabase {
       {
         id: "user_default",
         name: "Jeff",
+        username: "demo",
         email: "demo@gemindex.local",
         passwordHash: "$2b$10$XQr.sXlDCUQJhWKiJWPdiOzUR7RvrEq11V9damPhOQ16tp4suEiPe",
         role: "ADMIN",
@@ -470,10 +696,20 @@ export function createSeedDatabase(): GemIndexDatabase {
       },
     ],
     syncTasks: [],
+    portfolios: [
+      {
+        id: "portfolio_default",
+        userId: "user_default",
+        name: "Main Portfolio",
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
     collectionItems: [
       {
         id: "collection_1",
         userId: "user_default",
+        portfolioId: "portfolio_default",
         cardId: makeId("card", "swsh7-215-umbreon-vmax"),
         ownershipType: "GRADED",
         grader: "PSA",
@@ -486,8 +722,10 @@ export function createSeedDatabase(): GemIndexDatabase {
       {
         id: "collection_2",
         userId: "user_default",
+        portfolioId: "portfolio_default",
         cardId: makeId("card", "sv2-203-magikarp"),
         ownershipType: "RAW",
+        rawCondition: "NM",
         quantity: 2,
         acquisitionPriceUsd: 88,
         acquiredAt: "2025-09-08",
@@ -503,10 +741,15 @@ export function createSeedDatabase(): GemIndexDatabase {
         createdAt: "2026-01-18",
       },
     ],
+    sealedProducts,
+    sealedSales,
+    sealedSetMarketSnapshots,
     sealedInventoryItems: [
       {
         id: "sealed_1",
         userId: "user_default",
+        portfolioId: "portfolio_default",
+        productId: sealedByName.get("Evolving Skies Booster Box")?.id,
         setId: makeId("set", "swsh7"),
         productName: "Evolving Skies Booster Box",
         productType: "BOOSTER_BOX",
@@ -517,8 +760,23 @@ export function createSeedDatabase(): GemIndexDatabase {
         notes: "2 long-term hold, 1 potential flip",
       },
     ],
-    sealedWishlistItems: [],
+    sealedWishlistItems: [
+      {
+        id: "sealed_wishlist_1",
+        userId: "user_default",
+        productId: sealedByName.get("Crown Zenith ETB")?.id,
+        setId: makeId("set", "swsh12pt5"),
+        productName: "Crown Zenith ETB",
+        productType: "ELITE_TRAINER_BOX",
+        targetPriceUsd: 48,
+        priority: 2,
+        createdAt: "2026-01-19",
+        notes: "Watching for a restock dip",
+      },
+    ],
     scanEvents: [],
+    alertRules: [],
+    alertEvents: [],
     sync: {},
   };
 }

@@ -1,20 +1,22 @@
 import type { Metadata } from "next";
-import { Space_Grotesk, Source_Serif_4 } from "next/font/google";
+import localFont from "next/font/local";
 
 import "./globals.css";
 
-const spaceGrotesk = Space_Grotesk({
-  variable: "--font-space-grotesk",
-  subsets: ["latin"],
+const brandink = localFont({
+  src: "../../BrandinkSansLight-MV4mr.otf",
+  variable: "--font-brandink",
+  display: "swap",
 });
 
-const sourceSerif = Source_Serif_4({
-  variable: "--font-source-serif",
-  subsets: ["latin"],
+const brandinkDisplay = localFont({
+  src: "../../BrandinkSans-rgOpA.otf",
+  variable: "--font-brandink-display",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "Gem Index | Pokemon TCG Analytics",
+  title: "Investige | Pokemon TCG Analytics",
   description:
     "Track PSA and TAG gem rates, set values, market history, liquidity, arbitrage, and personal collection performance.",
 };
@@ -26,7 +28,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${spaceGrotesk.variable} ${sourceSerif.variable}`}>
+      <body className={`${brandink.variable} ${brandinkDisplay.variable}`}>
         {children}
       </body>
     </html>

@@ -37,9 +37,9 @@ Use `infra/render/render.yaml` to provision:
 5. Verify health:
    - `GET https://gemindex.onrender.com/api/health`
    - Expected: JSON with `"status":"ok"` and `totals` fields.
-6. Verify homepage is Gem Index (not Next starter):
+6. Verify homepage is Investige (not Next starter):
    - Open `https://gemindex.onrender.com`
-   - Expected page title contains `Gem Index | Pokemon TCG Analytics`
+   - Expected page title contains `Investige | Pokemon TCG Analytics`
 7. Verify worker:
    - `POST /api/jobs/worker?token=<CRON_SECRET>`
 
@@ -58,7 +58,7 @@ Your Render service is deploying the wrong project settings. In Render Web Servi
 Then recheck:
 
 - `https://gemindex.onrender.com/api/health` (must return JSON, not 404)
-- `https://gemindex.onrender.com` (must show Gem Index app, not starter template)
+- `https://gemindex.onrender.com` (must show Investige app, not starter template)
 
 ## Stripe Setup
 

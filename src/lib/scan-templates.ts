@@ -32,7 +32,7 @@ const sealedLabelTemplates: SealedLabelTemplate[] = [
   {
     id: "etb",
     productType: "ELITE_TRAINER_BOX",
-    label: "Elite Trainer Box",
+    label: "ETB",
     keywords: ["elite trainer box", "trainer box", "etb", "pokemon center elite trainer box"],
   },
   {

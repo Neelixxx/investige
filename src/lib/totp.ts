@@ -23,7 +23,7 @@ export function buildOtpAuthUri(params: {
   return generateURI({
     strategy: "totp",
     label: params.userEmail,
-    issuer: params.issuer ?? "Gem Index",
+    issuer: params.issuer ?? "Investige",
     secret: params.secret,
   });
 }

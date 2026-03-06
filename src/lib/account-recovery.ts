@@ -45,7 +45,7 @@ export async function issueEmailVerification(user: UserRecord): Promise<string> 
   await queueEmail({
     userId: user.id,
     to: user.email,
-    subject: "Verify your Gem Index email",
+    subject: "Verify your Investige email",
     template: "VERIFY_EMAIL",
     body: `Use this verification token: ${token}\n\nOr open: ${verifyUrl}`,
   });
@@ -115,12 +115,23 @@ export async function issuePasswordReset(user: UserRecord): Promise<string> {
   await queueEmail({
     userId: user.id,
     to: user.email,
-    subject: "Reset your Gem Index password",
+    subject: "Reset your Investige password",
     template: "PASSWORD_RESET",
     body: `Use this password reset token: ${token}\n\nOr open: ${resetUrl}`,
   });
 
   return token;
+}
+
+export async function issueUsernameReminder(user: UserRecord): Promise<void> {
+  const appUrl = process.env.APP_URL ?? "http://localhost:3000";
+  await queueEmail({
+    userId: user.id,
+    to: user.email,
+    subject: "Your Investige username",
+    template: "USERNAME_RECOVERY",
+    body: `Your username is: ${user.username}\n\nSign in: ${appUrl}`,
+  });
 }
 
 export async function confirmPasswordReset(token: string, newPassword: string): Promise<UserRecord | null> {

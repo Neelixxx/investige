@@ -1,7 +1,8 @@
 import { setTimeout as delay } from "node:timers/promises";
 
 const API_BASE = "https://api.pokemontcg.io/v2";
-const DEFAULT_PAGE_SIZE = 250;
+const DEFAULT_PAGE_SIZE = 100;
+const REQUEST_TIMEOUT_MS = Number(process.env.POKEMONTCG_TIMEOUT_MS ?? "12000");
 
 type PokeTcgSet = {
   id: string;
@@ -72,11 +73,33 @@ type PokeTcgResponse<T> = {
 
 function authHeaders(): HeadersInit {
   const apiKey = process.env.POKEMONTCG_API_KEY;
-  if (!apiKey) {
-    return {};
-  }
+  return {
+    Accept: "application/json",
+    ...(apiKey ? { "X-Api-Key": apiKey } : {}),
+  };
+}
 
-  return { "X-Api-Key": apiKey };
+function pageSize(): number {
+  const raw = Number(process.env.POKEMONTCG_PAGE_SIZE ?? String(DEFAULT_PAGE_SIZE));
+  if (!Number.isFinite(raw) || raw < 25 || raw > 250) {
+    return DEFAULT_PAGE_SIZE;
+  }
+  return Math.floor(raw);
+}
+
+async function fetchJsonWithTimeout(url: string): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    return await fetch(url, {
+      headers: authHeaders(),
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function normalizeDate(value: string | undefined, fallback = new Date().toISOString()): string {
@@ -103,13 +126,33 @@ async function fetchPage<T>(
   }
 
   const url = `${API_BASE}${path}?${search.toString()}`;
-  const response = await fetch(url, {
-    headers: authHeaders(),
-    cache: "no-store",
-  });
+  let response: Response;
+  try {
+    response = await fetchJsonWithTimeout(url);
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError" && retries > 0) {
+      await delay(350);
+      return fetchPage<T>(path, params, retries - 1);
+    }
+    throw error;
+  }
 
   if (response.ok) {
     return (await response.json()) as PokeTcgResponse<T>;
+  }
+
+  // Some PokemonTCG endpoints reject certain `select` combinations. Retry once
+  // without the field projection before treating the response as a hard failure.
+  if ((response.status === 400 || response.status === 404) && "select" in params) {
+    const fallbackParams = { ...params };
+    delete fallbackParams.select;
+    return fetchPage<T>(path, fallbackParams, retries);
+  }
+
+  if ((response.status === 400 || response.status === 404) && "orderBy" in params) {
+    const fallbackParams = { ...params };
+    delete fallbackParams.orderBy;
+    return fetchPage<T>(path, fallbackParams, retries);
   }
 
   if ((response.status === 429 || response.status >= 500) && retries > 0) {
@@ -132,7 +175,7 @@ async function fetchAllPages<T>(
     const result = await fetchPage<T>(path, {
       ...params,
       page,
-      pageSize: DEFAULT_PAGE_SIZE,
+      pageSize: pageSize(),
     });
 
     items.push(...result.data);

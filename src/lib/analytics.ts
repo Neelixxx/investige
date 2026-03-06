@@ -9,6 +9,8 @@ import type {
   MarketSeriesPoint,
   PopulationReportRecord,
   SaleRecord,
+  SealedMarketSeriesPoint,
+  SealedSaleRecord,
   SetMetrics,
 } from "./types";
 import { assessDataQuality } from "./data-quality";
@@ -26,6 +28,11 @@ const RARITY_SCORES: Record<string, number> = {
 
 function round2(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+function cardImageUrl(db: GemIndexDatabase, cardId: string): string | undefined {
+  const card = db.cards.find((entry) => entry.id === cardId);
+  return card?.imageUrl ?? card?.imageLargeUrl;
 }
 
 function average(values: number[]): number {
@@ -134,6 +141,18 @@ function monthKey(dateIso: string): string {
   return dateIso.slice(0, 7);
 }
 
+function monthStart(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+}
+
+function addMonths(date: Date, delta: number): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + delta, 1));
+}
+
+function monthDiff(start: Date, end: Date): number {
+  return (end.getUTCFullYear() - start.getUTCFullYear()) * 12 + (end.getUTCMonth() - start.getUTCMonth());
+}
+
 function monthlySeries(
   sales: SaleRecord[],
   cardId: string,
@@ -201,6 +220,162 @@ export function marketSeries(db: GemIndexDatabase, cardId: string): MarketSeries
       tag10: tag10.find((entry) => entry.month === month)?.price,
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function monthlySealedSeries(
+  sales: SealedSaleRecord[],
+  productId: string,
+): Array<{ month: string; price: number }> {
+  const buckets = new Map<string, number[]>();
+  sales
+    .filter((entry) => entry.productId === productId)
+    .forEach((entry) => {
+      const key = monthKey(entry.saleDate);
+      const existing = buckets.get(key) ?? [];
+      existing.push(entry.priceUsd);
+      buckets.set(key, existing);
+    });
+
+  return [...buckets.entries()]
+    .map(([month, prices]) => ({ month, price: average(prices) }))
+    .sort((a, b) => a.month.localeCompare(b.month));
+}
+
+export function sealedMarketSeries(
+  db: GemIndexDatabase,
+  productId: string,
+  userId?: string,
+): SealedMarketSeriesPoint[] {
+  const product = db.sealedProducts.find((entry) => entry.id === productId);
+  if (!product) {
+    return [];
+  }
+
+  const market = monthlySealedSeries(db.sealedSales, productId);
+  const inventory = db.sealedInventoryItems.filter(
+    (entry) => entry.productId === productId && (!userId || entry.userId === userId),
+  );
+  const wishlist = db.sealedWishlistItems.filter(
+    (entry) => entry.productId === productId && (!userId || entry.userId === userId),
+  );
+
+  const trackedStarts = inventory
+    .map((entry) => ({
+      month: monthKey(entry.acquiredAt ?? product.releaseDate ?? new Date().toISOString()),
+      value: entry.estimatedValueUsd ?? entry.acquisitionPriceUsd,
+    }))
+    .filter((entry): entry is { month: string; value: number } => typeof entry.value === "number" && entry.value > 0);
+  const targetStarts = wishlist
+    .map((entry) => ({
+      month: monthKey(entry.createdAt),
+      value: entry.targetPriceUsd,
+    }))
+    .filter((entry): entry is { month: string; value: number } => typeof entry.value === "number" && entry.value > 0);
+
+  const months = new Set<string>([
+    ...market.map((entry) => entry.month),
+    ...trackedStarts.map((entry) => entry.month),
+    ...targetStarts.map((entry) => entry.month),
+  ]);
+  if (!months.size) {
+    return [];
+  }
+
+  const sortedMonths = [...months].sort();
+  const endMonth = monthStart(new Date(`${sortedMonths[sortedMonths.length - 1]}-01T00:00:00.000Z`));
+  const startMonth = monthStart(new Date(`${sortedMonths[0]}-01T00:00:00.000Z`));
+  const monthCount = Math.max(1, monthDiff(startMonth, endMonth) + 1);
+  const marketByMonth = new Map(market.map((entry) => [entry.month, entry.price]));
+
+  const points: SealedMarketSeriesPoint[] = [];
+  for (let index = 0; index < monthCount; index += 1) {
+    const pointDate = addMonths(startMonth, index);
+    const month = monthKey(pointDate.toISOString());
+
+    const trackedValues = trackedStarts
+      .filter((entry) => entry.month <= month)
+      .map((entry) => entry.value);
+    const targetValues = targetStarts
+      .filter((entry) => entry.month <= month)
+      .map((entry) => entry.value);
+
+    points.push({
+      date: pointDate.toISOString(),
+      market: typeof marketByMonth.get(month) === "number" ? round2(marketByMonth.get(month) as number) : undefined,
+      tracked: trackedValues.length ? round2(average(trackedValues)) : undefined,
+      target: targetValues.length ? round2(average(targetValues)) : undefined,
+    });
+  }
+
+  return points;
+}
+
+export function sealedProductMetrics(
+  db: GemIndexDatabase,
+  productId: string,
+  userId?: string,
+): {
+  latestMarketPrice: number;
+  averageSalePrice: number;
+  roi12m: number;
+  volatility: number;
+  liquidityScore: number;
+  salesLast90d: number;
+  trackedValue?: number;
+  targetValue?: number;
+} {
+  const market = monthlySealedSeries(db.sealedSales, productId);
+  const directSales = db.sealedSales
+    .filter((entry) => entry.productId === productId)
+    .sort((a, b) => new Date(a.saleDate).getTime() - new Date(b.saleDate).getTime());
+  const inventory = db.sealedInventoryItems.filter(
+    (entry) => entry.productId === productId && (!userId || entry.userId === userId),
+  );
+  const wishlist = db.sealedWishlistItems.filter(
+    (entry) => entry.productId === productId && (!userId || entry.userId === userId),
+  );
+
+  const now = new Date("2026-02-28T00:00:00.000Z").getTime();
+  const ninetyDays = 90 * 24 * 60 * 60 * 1000;
+  const recentSales = directSales.filter(
+    (entry) => now - new Date(entry.saleDate).getTime() <= ninetyDays,
+  );
+  const recentIntervals: number[] = [];
+  for (let index = 1; index < recentSales.length; index += 1) {
+    recentIntervals.push(
+      (new Date(recentSales[index].saleDate).getTime() -
+        new Date(recentSales[index - 1].saleDate).getTime()) /
+        (1000 * 60 * 60 * 24),
+    );
+  }
+  const avgRecentGap = recentIntervals.length ? average(recentIntervals) : 30;
+
+  const trackedValues = inventory
+    .map((entry) => entry.estimatedValueUsd ?? entry.acquisitionPriceUsd)
+    .filter((value): value is number => typeof value === "number" && value > 0);
+  const targetValues = wishlist
+    .map((entry) => entry.targetPriceUsd)
+    .filter((value): value is number => typeof value === "number" && value > 0);
+
+  const latestMarketPrice = directSales.length ? directSales[directSales.length - 1].priceUsd : 0;
+  const firstMarketPrice = directSales[0]?.priceUsd ?? 0;
+  const roi12m =
+    firstMarketPrice > 0 && latestMarketPrice > 0
+      ? ((latestMarketPrice - firstMarketPrice) / firstMarketPrice) * 100
+      : 0;
+
+  return {
+    latestMarketPrice: round2(latestMarketPrice),
+    averageSalePrice: round2(average(directSales.map((entry) => entry.priceUsd))),
+    roi12m: round2(roi12m),
+    volatility: round2(volatilityFromSeries(market)),
+    liquidityScore: round2(
+      Math.min(100, Math.min(70, recentSales.length * 14) + Math.min(30, (30 / Math.max(1, avgRecentGap)) * 8)),
+    ),
+    salesLast90d: recentSales.length,
+    trackedValue: trackedValues.length ? round2(average(trackedValues)) : undefined,
+    targetValue: targetValues.length ? round2(average(targetValues)) : undefined,
+  };
 }
 
 export function cardMetrics(db: GemIndexDatabase): CardMetrics[] {
@@ -273,6 +448,20 @@ function setSeries(db: GemIndexDatabase, setId: string): Array<{ month: string; 
     .sort((a, b) => a.month.localeCompare(b.month));
 }
 
+export function sealedSetMarketSeries(
+  db: GemIndexDatabase,
+  setId: string,
+): Array<{ date: string; tcgplayerListings: number; marketValueUsd: number }> {
+  return db.sealedSetMarketSnapshots
+    .filter((entry) => entry.setId === setId)
+    .sort((a, b) => a.snapshotDate.localeCompare(b.snapshotDate))
+    .map((entry) => ({
+      date: entry.snapshotDate,
+      tcgplayerListings: entry.tcgplayerListings,
+      marketValueUsd: entry.marketValueUsd,
+    }));
+}
+
 export function setMetrics(db: GemIndexDatabase, metrics = cardMetrics(db)): SetMetrics[] {
   return db.sets
     .map((set) => {
@@ -330,9 +519,7 @@ function alertLabel(db: GemIndexDatabase, cardId: string): string {
   if (!card) {
     return cardId;
   }
-  const set = db.sets.find((entry) => entry.id === card.setId);
-  const setCode = set?.code.toUpperCase() ?? "N/A";
-  return `${card.name} ${card.cardNumber} (${setCode})`;
+  return `${card.name} ${card.cardNumber}`;
 }
 
 export function dashboard(db: GemIndexDatabase): DashboardData {
@@ -353,10 +540,10 @@ export function dashboard(db: GemIndexDatabase): DashboardData {
   }
 
   const undervalued: DashboardAlert[] = metrics
-    .map((metric) => {
+    .flatMap((metric) => {
       const series = marketSeries(db, metric.cardId).map((point) => point.raw).filter((value): value is number => typeof value === "number");
       if (series.length < 4) {
-        return null;
+        return [];
       }
       const latest = series[series.length - 1];
       const avgRecent = average(series.slice(-4));
@@ -364,43 +551,81 @@ export function dashboard(db: GemIndexDatabase): DashboardData {
       const score = discount * 0.7 + metric.liquidityScore * 0.3;
 
       if (discount < 8 || metric.liquidityScore < 45) {
-        return null;
+        return [];
       }
 
-      return {
-        cardId: metric.cardId,
-        label: alertLabel(db, metric.cardId),
-        score: round2(score),
-        reason: `${round2(discount)}% below recent average with liquidity ${metric.liquidityScore}`,
-      } satisfies DashboardAlert;
+      return [
+        {
+          cardId: metric.cardId,
+          label: alertLabel(db, metric.cardId),
+          setName: metric.setName,
+          imageUrl: cardImageUrl(db, metric.cardId),
+          score: round2(score),
+          reason: `${round2(discount)}% below recent average with liquidity ${round2(metric.liquidityScore)}%`,
+          details: [
+            { label: "Current Raw Price", value: `$${round2(latest)}` },
+            { label: "4-Month Average", value: `$${round2(avgRecent)}` },
+            { label: "Discount Vs Avg", value: `${round2(discount)}%` },
+            { label: "Liquidity %", value: `${round2(metric.liquidityScore)}%` },
+            { label: "Gem Rate", value: `${metric.gemRateBlended}%` },
+            { label: "12-Month ROI", value: `${metric.roi12m}%` },
+            { label: "Signal Score", value: `${round2(score)}` },
+          ],
+        } satisfies DashboardAlert,
+      ];
     })
-    .filter((entry): entry is DashboardAlert => Boolean(entry))
     .sort((a, b) => b.score - a.score)
     .slice(0, 6);
 
   const flipperSignals: DashboardAlert[] = metrics
-    .map((metric) => {
+    .flatMap((metric) => {
       const series = marketSeries(db, metric.cardId).map((point) => point.raw).filter((value): value is number => typeof value === "number");
       if (series.length < 5) {
-        return null;
+        return [];
       }
       const latest = series[series.length - 1];
       const prior = series[series.length - 5];
       const momentum = prior > 0 ? ((latest - prior) / prior) * 100 : 0;
 
-      if (momentum < 10 || metric.liquidityScore < 55) {
-        return null;
+      const roundedMomentum = round2(momentum);
+      const roundedLiquidity = round2(metric.liquidityScore);
+      const signalScore = round2(roundedMomentum * 0.7 + roundedLiquidity * 0.3);
+
+      if (roundedMomentum < 10 || roundedLiquidity < 55) {
+        return [];
       }
 
-      return {
-        cardId: metric.cardId,
-        label: alertLabel(db, metric.cardId),
-        score: round2(momentum * 0.6 + metric.liquidityScore * 0.4),
-        reason: `4-month momentum ${round2(momentum)}% with liquidity ${metric.liquidityScore}`,
-      } satisfies DashboardAlert;
+      return [
+        {
+          cardId: metric.cardId,
+          label: alertLabel(db, metric.cardId),
+          setName: metric.setName,
+          imageUrl: cardImageUrl(db, metric.cardId),
+          score: signalScore,
+          reason: "Strong short-term flip setup based on 4-month momentum and current liquidity.",
+          momentum4mPct: roundedMomentum,
+          liquidityScore: roundedLiquidity,
+          details: [
+            { label: "Current Raw Price", value: `$${round2(latest)}` },
+            { label: "4-Month Baseline", value: `$${round2(prior)}` },
+            { label: "4-Month Momentum %", value: `${roundedMomentum}%` },
+            { label: "Liquidity %", value: `${roundedLiquidity}%` },
+            { label: "Gem Rate", value: `${metric.gemRateBlended}%` },
+            { label: "12-Month ROI", value: `${metric.roi12m}%` },
+            {
+              label: "Signal Score",
+              value: `${signalScore}`,
+            },
+          ],
+        } satisfies DashboardAlert,
+      ];
     })
-    .filter((entry): entry is DashboardAlert => Boolean(entry))
-    .sort((a, b) => b.score - a.score)
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        (b.momentum4mPct ?? 0) - (a.momentum4mPct ?? 0) ||
+        (b.liquidityScore ?? 0) - (a.liquidityScore ?? 0),
+    )
     .slice(0, 6);
 
   const topArbitrage: DashboardAlert[] = metrics
@@ -410,8 +635,20 @@ export function dashboard(db: GemIndexDatabase): DashboardData {
     .map((metric) => ({
       cardId: metric.cardId,
       label: alertLabel(db, metric.cardId),
+      setName: metric.setName,
+      imageUrl: cardImageUrl(db, metric.cardId),
       score: metric.gradingArbitrageUsd,
       reason: `Expected PSA grading edge: $${metric.gradingArbitrageUsd}`,
+      details: [
+        { label: "Raw Price", value: `$${metric.rawPrice}` },
+        { label: "PSA 10 Price", value: `$${metric.psa10Price}` },
+        { label: "TAG 10 Price", value: `$${metric.tag10Price}` },
+        { label: "PSA Gem Rate", value: `${metric.gemRatePsa}%` },
+        { label: "Blended Gem Rate", value: `${metric.gemRateBlended}%` },
+        { label: "Liquidity %", value: `${metric.liquidityScore}%` },
+        { label: "12-Month ROI", value: `${metric.roi12m}%` },
+        { label: "Expected PSA Edge", value: `$${metric.gradingArbitrageUsd}` },
+      ],
     }));
 
   return {

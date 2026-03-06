@@ -51,6 +51,10 @@ function parseThreshold(name: keyof typeof DEFAULT_THRESHOLDS): number {
   return raw;
 }
 
+function allowSeededAnalytics(): boolean {
+  return process.env.ALLOW_SEEDED_ANALYTICS === "1";
+}
+
 export function assessDataQuality(db: GemIndexDatabase): DataQualitySnapshot {
   const thresholds = {
     minLiveSets: parseThreshold("minLiveSets"),
@@ -90,7 +94,9 @@ export function assessDataQuality(db: GemIndexDatabase): DataQualitySnapshot {
   const populationsReady =
     populationReports.live >= thresholds.minLivePopulationReports &&
     livePopulationCardCoveragePct >= thresholds.minLivePopulationCardCoveragePct;
-  const investmentMetricsReady = catalogReady && salesReady && populationsReady;
+  const seededAnalyticsAllowed = allowSeededAnalytics();
+  const investmentMetricsReady =
+    seededAnalyticsAllowed || (catalogReady && salesReady && populationsReady);
 
   const blockers: string[] = [];
   if (!catalogReady) {
@@ -121,10 +127,14 @@ export function assessDataQuality(db: GemIndexDatabase): DataQualitySnapshot {
     PARTIAL_LIVE: "Partial Live",
     LIVE_READY: "Live Ready",
   } as const;
+  const label =
+    seededAnalyticsAllowed && !catalogReady && !salesReady && !populationsReady
+      ? "Seeded Demo"
+      : labelByStatus[status];
 
   return {
     status,
-    label: labelByStatus[status],
+    label,
     investmentMetricsReady,
     blockingReason: investmentMetricsReady
       ? undefined

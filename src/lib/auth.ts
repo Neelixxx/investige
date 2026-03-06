@@ -26,6 +26,7 @@ function sessionSecret(): Uint8Array {
 export function publicUser(user: UserRecord): PublicUser {
   return {
     id: user.id,
+    username: user.username,
     email: user.email,
     name: user.name,
     role: user.role,

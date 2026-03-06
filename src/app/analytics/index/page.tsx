@@ -5,6 +5,14 @@ import { AnalyticsNav } from "@/components/analytics-nav";
 
 export const dynamic = "force-dynamic";
 
+function formatPercent(value: number, digits = 2): string {
+  const rounded = Number(value.toFixed(digits));
+  if (rounded === 100) {
+    return "100%";
+  }
+  return `${rounded.toFixed(digits)}%`;
+}
+
 export default async function IndexAnalyticsPage() {
   const db = await readDb();
   const dataQuality = assessDataQuality(db);
@@ -41,8 +49,8 @@ export default async function IndexAnalyticsPage() {
               <div key={item.cardId} className="grid grid-cols-[2fr_1fr_1fr_1fr] border-b py-1">
                 <span>{item.cardLabel}</span>
                 <span>${item.rawPrice.toFixed(2)}</span>
-                <span>{item.weightPct.toFixed(2)}%</span>
-                <span>{item.roi12m.toFixed(2)}%</span>
+                <span>{formatPercent(item.weightPct)}</span>
+                <span>{formatPercent(item.roi12m)}</span>
               </div>
             ))}
           </div>

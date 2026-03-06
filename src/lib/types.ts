@@ -1,6 +1,7 @@
 export type Grader = "PSA" | "TAG";
 export type CardCondition = "RAW" | "PSA10" | "TAG10";
 export type OwnershipType = "RAW" | "GRADED";
+export type RawCardCondition = "NM" | "LP" | "HP" | "DMG";
 export type ScanDestination = "COLLECTION" | "WISHLIST" | "PRICE_CHECK";
 export type UserRole = "ADMIN" | "USER";
 export type SubscriptionTier = "FREE" | "PRO" | "ELITE";
@@ -9,6 +10,19 @@ export type SubscriptionStatus = "TRIALING" | "ACTIVE" | "PAST_DUE" | "CANCELED"
 export type SyncJobType = "CATALOG_SYNC" | "SALES_SYNC" | "TCGPLAYER_DIRECT_SYNC";
 export type SyncTaskStatus = "PENDING" | "RUNNING" | "COMPLETED" | "FAILED";
 export type OutboxStatus = "PENDING" | "SENT" | "FAILED";
+export type AlertEntityType = "CARD" | "SEALED_PRODUCT" | "SET";
+export type AlertConditionType =
+  | "PRICE_BELOW"
+  | "PRICE_ABOVE"
+  | "PCT_CHANGE_UP"
+  | "PCT_CHANGE_DOWN";
+export type SealedProductType =
+  | "BOOSTER_BOX"
+  | "ELITE_TRAINER_BOX"
+  | "COLLECTION_BOX"
+  | "TIN"
+  | "BLISTER"
+  | "OTHER";
 
 export interface PokemonSetRecord {
   id: string;
@@ -72,6 +86,7 @@ export interface SaleRecord {
 export interface UserRecord {
   id: string;
   name: string;
+  username: string;
   email: string;
   passwordHash: string;
   role: UserRole;
@@ -114,7 +129,7 @@ export interface EmailOutboxRecord {
   userId?: string;
   to: string;
   subject: string;
-  template: "VERIFY_EMAIL" | "PASSWORD_RESET";
+  template: "VERIFY_EMAIL" | "PASSWORD_RESET" | "USERNAME_RECOVERY";
   body: string;
   status: OutboxStatus;
   createdAt: string;
@@ -152,17 +167,29 @@ export interface SyncTaskRecord {
   createdAt: string;
   startedAt?: string;
   finishedAt?: string;
+  result?: Record<string, number>;
   resultSummary?: string;
   error?: string;
+}
+
+export interface PortfolioRecord {
+  id: string;
+  userId: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CollectionItemRecord {
   id: string;
   userId: string;
+  portfolioId?: string;
   cardId: string;
   ownershipType: OwnershipType;
+  rawCondition?: RawCardCondition;
   grader?: Grader;
   grade?: number;
+  certificationNumber?: string;
   quantity: number;
   acquiredAt?: string;
   acquisitionPriceUsd?: number;
@@ -181,15 +208,14 @@ export interface WishlistItemRecord {
 export interface SealedInventoryRecord {
   id: string;
   userId: string;
+  portfolioId?: string;
+  productId?: string;
   setId: string;
   productName: string;
-  productType:
-    | "BOOSTER_BOX"
-    | "ELITE_TRAINER_BOX"
-    | "COLLECTION_BOX"
-    | "TIN"
-    | "BLISTER"
-    | "OTHER";
+  productType: SealedProductType;
+  grader?: Grader;
+  grade?: number;
+  certificationNumber?: string;
   quantity: number;
   acquisitionPriceUsd?: number;
   estimatedValueUsd?: number;
@@ -200,19 +226,47 @@ export interface SealedInventoryRecord {
 export interface SealedWishlistItemRecord {
   id: string;
   userId: string;
+  productId?: string;
   setId: string;
   productName: string;
-  productType:
-    | "BOOSTER_BOX"
-    | "ELITE_TRAINER_BOX"
-    | "COLLECTION_BOX"
-    | "TIN"
-    | "BLISTER"
-    | "OTHER";
+  productType: SealedProductType;
   targetPriceUsd?: number;
   priority: number;
   createdAt: string;
   notes?: string;
+}
+
+export interface SealedProductRecord {
+  id: string;
+  setId: string;
+  productName: string;
+  productType: SealedProductType;
+  imageUrl?: string;
+  releaseDate?: string;
+  upc?: string;
+  marketValueUsd?: number;
+  source?: "SEED" | "MANUAL" | "SCANNER";
+  externalId?: string;
+}
+
+export interface SealedSaleRecord {
+  id: string;
+  productId: string;
+  priceUsd: number;
+  saleDate: string;
+  source?: string;
+  provider?: "SEED" | "MANUAL" | "INGESTED";
+  providerRef?: string;
+  currency?: string;
+}
+
+export interface SealedSetMarketSnapshotRecord {
+  id: string;
+  setId: string;
+  snapshotDate: string;
+  tcgplayerListings: number;
+  marketValueUsd: number;
+  source?: "SEED" | "TCGPLAYER";
 }
 
 export interface ScanEventRecord {
@@ -224,11 +278,46 @@ export interface ScanEventRecord {
   createdAt: string;
 }
 
+export interface AlertRuleRecord {
+  id: string;
+  userId: string;
+  entityType: AlertEntityType;
+  entityId: string;
+  entityLabel: string;
+  condition: AlertConditionType;
+  thresholdValue: number;
+  lookbackMonths?: number;
+  enabled: boolean;
+  lastConditionMet?: boolean;
+  lastEvaluatedValue?: number;
+  lastTriggeredAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AlertEventRecord {
+  id: string;
+  userId: string;
+  ruleId: string;
+  entityType: AlertEntityType;
+  entityId: string;
+  entityLabel: string;
+  condition: AlertConditionType;
+  thresholdValue: number;
+  currentValue: number;
+  baselineValue?: number;
+  percentChange?: number;
+  message: string;
+  triggeredAt: string;
+  readAt?: string;
+}
+
 export interface SyncState {
   lastCatalogSyncAt?: string;
   lastSalesSyncAt?: string;
   lastCatalogProvider?: string;
   lastSalesProviders?: string[];
+  lastSealedSalesUpserted?: number;
   lastError?: string;
   lastWorkerRunAt?: string;
   schedulerStartedAt?: string;
@@ -246,11 +335,17 @@ export interface GemIndexDatabase {
   emailOutbox: EmailOutboxRecord[];
   syncJobs: SyncJobRecord[];
   syncTasks: SyncTaskRecord[];
+  portfolios: PortfolioRecord[];
   collectionItems: CollectionItemRecord[];
   wishlistItems: WishlistItemRecord[];
+  sealedProducts: SealedProductRecord[];
+  sealedSales: SealedSaleRecord[];
+  sealedSetMarketSnapshots: SealedSetMarketSnapshotRecord[];
   sealedInventoryItems: SealedInventoryRecord[];
   sealedWishlistItems: SealedWishlistItemRecord[];
   scanEvents: ScanEventRecord[];
+  alertRules: AlertRuleRecord[];
+  alertEvents: AlertEventRecord[];
   sync: SyncState;
 }
 
@@ -295,11 +390,26 @@ export interface MarketSeriesPoint {
   tag10?: number;
 }
 
+export interface SealedMarketSeriesPoint {
+  date: string;
+  market?: number;
+  tracked?: number;
+  target?: number;
+}
+
 export interface DashboardAlert {
   cardId: string;
   label: string;
+  setName?: string;
+  imageUrl?: string;
   score: number;
   reason: string;
+  momentum4mPct?: number;
+  liquidityScore?: number;
+  details?: Array<{
+    label: string;
+    value: string;
+  }>;
 }
 
 export type DataSourceStatus = "SEEDED" | "PARTIAL_LIVE" | "LIVE_READY";
@@ -352,6 +462,7 @@ export interface DashboardData {
 
 export interface PublicUser {
   id: string;
+  username: string;
   email: string;
   name: string;
   role: UserRole;
