@@ -122,6 +122,15 @@ type SyncTaskApi = {
   error?: string;
 };
 
+type PopulationImportSummary = {
+  grader: "PSA" | "TAG";
+  rowsParsed: number;
+  inserted: number;
+  updated: number;
+  unmatched: number;
+  totalPopulationReports: number;
+};
+
 type HeaderBackgroundId =
   | "DEFAULT"
   | "BULBASAUR_FOREST"
@@ -368,10 +377,11 @@ const PORTFOLIO_HOME_TABS: Array<{ id: HomeTab; label: string }> = [
 
 const SETTINGS_HOME_TABS: Array<{
   label: string;
-  subsection: "ACCOUNT" | "HEADER_BACKGROUND" | "BILLING_INFORMATION" | "ALERTS";
+  subsection: "ACCOUNT" | "HEADER_BACKGROUND" | "DATA_SOURCES" | "BILLING_INFORMATION" | "ALERTS";
 }> = [
   { label: "Account", subsection: "ACCOUNT" },
   { label: "Header Background", subsection: "HEADER_BACKGROUND" },
+  { label: "Data Sources", subsection: "DATA_SOURCES" },
   { label: "Billing Information", subsection: "BILLING_INFORMATION" },
   { label: "Alerts", subsection: "ALERTS" },
 ];
@@ -2566,8 +2576,15 @@ export function GemIndexApp() {
   const [searchDropdownIndex, setSearchDropdownIndex] = useState(0);
   const [headerBackgroundId, setHeaderBackgroundId] = useState<HeaderBackgroundId>("DEFAULT");
   const [settingsSubsection, setSettingsSubsection] = useState<
-    "ACCOUNT" | "HEADER_BACKGROUND" | "BILLING_INFORMATION" | "ALERTS"
+    "ACCOUNT" | "HEADER_BACKGROUND" | "DATA_SOURCES" | "BILLING_INFORMATION" | "ALERTS"
   >("ACCOUNT");
+  const [psaPopulationUrl, setPsaPopulationUrl] = useState("");
+  const [tagPopulationUrl, setTagPopulationUrl] = useState("");
+  const [psaPopulationFile, setPsaPopulationFile] = useState<File | null>(null);
+  const [tagPopulationFile, setTagPopulationFile] = useState<File | null>(null);
+  const [replacePopulationForGrader, setReplacePopulationForGrader] = useState(false);
+  const [populationImportBusy, setPopulationImportBusy] = useState<"PSA" | "TAG" | null>(null);
+  const [populationImportResult, setPopulationImportResult] = useState<PopulationImportSummary | null>(null);
   const [accountFirstName, setAccountFirstName] = useState("");
   const [accountLastName, setAccountLastName] = useState("");
   const [accountEmail, setAccountEmail] = useState("");
@@ -2722,9 +2739,69 @@ export function GemIndexApp() {
     setSearchDropdownIndex(0);
   }
 
-  function openSettingsSubsection(subsection: "ACCOUNT" | "HEADER_BACKGROUND" | "BILLING_INFORMATION" | "ALERTS") {
+  function openSettingsSubsection(subsection: "ACCOUNT" | "HEADER_BACKGROUND" | "DATA_SOURCES" | "BILLING_INFORMATION" | "ALERTS") {
     setSettingsSubsection(subsection);
     setActiveTab("SETTINGS");
+  }
+
+  async function importPopulationFromUrl(grader: "PSA" | "TAG") {
+    const url = grader === "PSA" ? psaPopulationUrl.trim() : tagPopulationUrl.trim();
+    if (!url) {
+      setMessage(`Enter a ${grader} feed URL first.`);
+      return;
+    }
+
+    setPopulationImportBusy(grader);
+    try {
+      const out = await api<PopulationImportSummary>("/api/populations/import", {
+        method: "POST",
+        body: JSON.stringify({
+          grader,
+          url,
+          replaceExisting: replacePopulationForGrader,
+        }),
+      });
+      setPopulationImportResult(out);
+      await refresh(user?.role === "ADMIN");
+      setMessage(
+        `${grader} import complete. Parsed ${out.rowsParsed}, inserted ${out.inserted}, updated ${out.updated}, unmatched ${out.unmatched}.`,
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : `${grader} import failed.`);
+    } finally {
+      setPopulationImportBusy(null);
+    }
+  }
+
+  async function importPopulationFromFile(grader: "PSA" | "TAG") {
+    const file = grader === "PSA" ? psaPopulationFile : tagPopulationFile;
+    if (!file) {
+      setMessage(`Select a ${grader} JSON file first.`);
+      return;
+    }
+
+    setPopulationImportBusy(grader);
+    try {
+      const raw = await file.text();
+      const payload = JSON.parse(raw) as unknown;
+      const out = await api<PopulationImportSummary>("/api/populations/import", {
+        method: "POST",
+        body: JSON.stringify({
+          grader,
+          payload,
+          replaceExisting: replacePopulationForGrader,
+        }),
+      });
+      setPopulationImportResult(out);
+      await refresh(user?.role === "ADMIN");
+      setMessage(
+        `${grader} file import complete. Parsed ${out.rowsParsed}, inserted ${out.inserted}, updated ${out.updated}, unmatched ${out.unmatched}.`,
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : `${grader} file import failed.`);
+    } finally {
+      setPopulationImportBusy(null);
+    }
   }
 
   useEffect(() => {
@@ -7127,10 +7204,11 @@ export function GemIndexApp() {
         </div>
         <section className="section-panel rounded-xl p-3">
           <p className="text-sm font-semibold text-slate-100">Settings Sections</p>
-          <div className="mt-3 grid gap-2 md:grid-cols-4">
+          <div className="mt-3 grid gap-2 md:grid-cols-5">
             {[
               { id: "ACCOUNT" as const, label: "Account" },
               { id: "HEADER_BACKGROUND" as const, label: "Header Background" },
+              { id: "DATA_SOURCES" as const, label: "Data Sources" },
               { id: "BILLING_INFORMATION" as const, label: "Billing Information" },
               { id: "ALERTS" as const, label: "Alerts" },
             ].map((section) => (
@@ -7315,17 +7393,116 @@ export function GemIndexApp() {
           </section>
         ) : null}
 
-        <section className="section-panel rounded-xl p-3">
-          <div className="flex flex-wrap items-center gap-2">
+        {settingsSubsection === "DATA_SOURCES" ? (
+          <section className="section-panel rounded-xl p-3">
+            <h3 className="font-semibold">Data Sources</h3>
+            <p className="mt-1 text-sm text-slate-300">
+              Import live PSA and TAG population data by URL or JSON file.
+            </p>
+            <label className="mt-3 inline-flex items-center gap-2 text-sm text-slate-200">
+              <input
+                type="checkbox"
+                checked={replacePopulationForGrader}
+                onChange={(event) => setReplacePopulationForGrader(event.target.checked)}
+              />
+              Replace Existing Imported Records For The Selected Grader
+            </label>
+
+            <div className="mt-3 grid gap-3 xl:grid-cols-2">
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                <p className="text-sm font-semibold text-slate-100">PSA Population Feed</p>
+                <input
+                  className="mt-2 w-full rounded border border-white/20 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-400"
+                  value={psaPopulationUrl}
+                  onChange={(event) => setPsaPopulationUrl(event.target.value)}
+                  placeholder="https://..."
+                />
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="rounded border border-cyan-300/40 bg-cyan-500/20 px-3 py-1 text-sm text-cyan-100 disabled:opacity-60"
+                    onClick={() => importPopulationFromUrl("PSA")}
+                    disabled={populationImportBusy !== null}
+                  >
+                    Import PSA From URL
+                  </button>
+                </div>
+                <input
+                  className="mt-3 w-full rounded border border-white/20 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 file:mr-3 file:rounded file:border-0 file:bg-white/10 file:px-3 file:py-1 file:text-sm file:text-slate-100"
+                  type="file"
+                  accept=".json,application/json"
+                  onChange={(event) => setPsaPopulationFile(event.target.files?.[0] ?? null)}
+                />
+                <button
+                  type="button"
+                  className="mt-2 rounded border border-emerald-300/40 bg-emerald-500/20 px-3 py-1 text-sm text-emerald-100 disabled:opacity-60"
+                  onClick={() => importPopulationFromFile("PSA")}
+                  disabled={populationImportBusy !== null}
+                >
+                  Import PSA File
+                </button>
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                <p className="text-sm font-semibold text-slate-100">TAG Population Feed</p>
+                <input
+                  className="mt-2 w-full rounded border border-white/20 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-400"
+                  value={tagPopulationUrl}
+                  onChange={(event) => setTagPopulationUrl(event.target.value)}
+                  placeholder="https://..."
+                />
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="rounded border border-cyan-300/40 bg-cyan-500/20 px-3 py-1 text-sm text-cyan-100 disabled:opacity-60"
+                    onClick={() => importPopulationFromUrl("TAG")}
+                    disabled={populationImportBusy !== null}
+                  >
+                    Import TAG From URL
+                  </button>
+                </div>
+                <input
+                  className="mt-3 w-full rounded border border-white/20 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 file:mr-3 file:rounded file:border-0 file:bg-white/10 file:px-3 file:py-1 file:text-sm file:text-slate-100"
+                  type="file"
+                  accept=".json,application/json"
+                  onChange={(event) => setTagPopulationFile(event.target.files?.[0] ?? null)}
+                />
+                <button
+                  type="button"
+                  className="mt-2 rounded border border-emerald-300/40 bg-emerald-500/20 px-3 py-1 text-sm text-emerald-100 disabled:opacity-60"
+                  onClick={() => importPopulationFromFile("TAG")}
+                  disabled={populationImportBusy !== null}
+                >
+                  Import TAG File
+                </button>
+              </div>
+            </div>
+
+            {populationImportResult ? (
+              <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-200">
+                <p className="font-semibold text-slate-100">Last Population Import Result ({populationImportResult.grader})</p>
+                <p className="mt-1">
+                  Parsed: {populationImportResult.rowsParsed} | Inserted: {populationImportResult.inserted} | Updated: {populationImportResult.updated} | Unmatched: {populationImportResult.unmatched}
+                </p>
+                <p className="mt-1 text-xs text-slate-400">
+                  Total Population Reports In DB: {populationImportResult.totalPopulationReports}
+                </p>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+
+        <section className="section-panel relative z-20 rounded-xl p-3">
+          <div className="relative z-20 flex flex-wrap items-center gap-2">
             <h3 className="font-semibold">Background Sync + Queue</h3>
             <input className="w-24 rounded border border-white/20 bg-slate-900/60 px-2 py-1 text-sm text-slate-100 outline-none focus:border-cyan-300/60" type="number" value={syncPageLimit} onChange={(e) => setSyncPageLimit(Number(e.target.value))} />
             {user.role === "ADMIN" && can("LIVE_SYNC_QUEUE") ? (
               <>
-                <button className="rounded bg-emerald-700 px-3 py-1 text-sm text-white" onClick={() => runSync("catalog")} data-testid="queue-catalog">Queue Catalog</button>
-                <button className="rounded bg-emerald-500 px-3 py-1 text-sm text-slate-950" onClick={() => runSync("catalog", true)}>Run Catalog Sync Now</button>
-                <button className="rounded bg-cyan-700 px-3 py-1 text-sm text-white" onClick={() => runSync("sales")} data-testid="queue-sales">Queue Sales</button>
-                {can("DIRECT_TCGPLAYER_SYNC") ? <button className="rounded bg-indigo-700 px-3 py-1 text-sm text-white" onClick={queueDirectTcgplayerSync}>Queue TCGplayer Direct</button> : null}
-                <button className="rounded bg-slate-900 px-3 py-1 text-sm text-white" onClick={runWorkerNow} data-testid="run-worker-tick">Run Worker Tick</button>
+                <button type="button" className="cursor-pointer rounded bg-emerald-700 px-3 py-1 text-sm text-white" onClick={() => runSync("catalog")} data-testid="queue-catalog">Queue Catalog</button>
+                <button type="button" className="cursor-pointer rounded bg-emerald-500 px-3 py-1 text-sm text-slate-950" onClick={() => runSync("catalog", true)}>Run Catalog Sync Now</button>
+                <button type="button" className="cursor-pointer rounded bg-cyan-700 px-3 py-1 text-sm text-white" onClick={() => runSync("sales")} data-testid="queue-sales">Queue Sales</button>
+                {can("DIRECT_TCGPLAYER_SYNC") ? <button type="button" className="cursor-pointer rounded bg-indigo-700 px-3 py-1 text-sm text-white" onClick={queueDirectTcgplayerSync}>Queue TCGplayer Direct</button> : null}
+                <button type="button" className="cursor-pointer rounded bg-slate-900 px-3 py-1 text-sm text-white" onClick={runWorkerNow} data-testid="run-worker-tick">Run Worker Tick</button>
               </>
             ) : <p className="text-xs text-slate-300">Upgrade to Pro to run live sync jobs.</p>}
           </div>

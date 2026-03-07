@@ -303,10 +303,9 @@ function pickCardmarketRaw(
 }
 
 export async function fetchLiveSets(): Promise<LiveSetRecord[]> {
-  const sets = await fetchAllPages<PokeTcgSet>("/sets", {
-    orderBy: "releaseDate",
-    select: "id,name,series,releaseDate,printedTotal,total,images,updatedAt",
-  });
+  // Avoid brittle query projections/sorting options that some API edges reject.
+  // We fetch a full page payload and normalize fields locally for resilience.
+  const sets = await fetchAllPages<PokeTcgSet>("/sets", {});
 
   const now = new Date().toISOString();
   return sets.map((set) => ({
@@ -326,11 +325,7 @@ export async function fetchLiveSets(): Promise<LiveSetRecord[]> {
 export async function fetchLiveCards(pageLimit?: number): Promise<LiveCardRecord[]> {
   const cards = await fetchAllPages<PokeTcgCard>(
     "/cards",
-    {
-      orderBy: "set.releaseDate,number",
-      select:
-        "id,name,number,rarity,supertype,subtypes,set,images,tcgplayer,cardmarket,updatedAt",
-    },
+    {},
     pageLimit,
   );
 
