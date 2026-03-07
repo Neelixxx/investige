@@ -96,6 +96,8 @@ Key ones:
 - `REDIS_URL` (optional; enables queue worker mode)
 - `POKEMONTCG_API_KEY`
 - `EUR_TO_USD_RATE`
+- `PSA_API_BEARER_TOKEN` (optional, for PSA cert API import)
+- `PSA_API_BASE_URL` (optional, default `https://api.psacard.com`)
 - `ALLOW_SEEDED_ANALYTICS` (`0` in production to prefer live-only analytics)
 - `SCHEDULER_TICK_MS`
 - `WORKER_TICK_MS`
@@ -224,6 +226,8 @@ Sync and jobs:
 - `POST /api/jobs/enqueue` (admin)
 - `POST /api/jobs/worker` (admin or cron secret)
 - `POST /api/jobs/bootstrap` (admin)
+- `POST /api/populations/import` (admin; import PSA/TAG rows from URL/JSON payload)
+- `POST /api/populations/import-psa-certs` (admin; import PSA rows by cert numbers)
 
 ## Local data file
 

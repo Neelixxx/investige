@@ -131,6 +131,17 @@ type PopulationImportSummary = {
   totalPopulationReports: number;
 };
 
+type PsaCertImportSummary = {
+  certsRequested: number;
+  certsParsed: number;
+  inserted: number;
+  updated: number;
+  unmatched: number;
+  failed: number;
+  totalPopulationReports: number;
+  errors: Array<{ certNumber: string; error: string }>;
+};
+
 type HeaderBackgroundId =
   | "DEFAULT"
   | "BULBASAUR_FOREST"
@@ -514,6 +525,10 @@ function normalizeSearchText(value: string): string {
 
 function normalizeRawCardCondition(value?: RawCardCondition): RawCardCondition {
   return value ?? "NM";
+}
+
+function setCodeLabel(value?: string): string {
+  return value?.toUpperCase() ?? "Unknown Set";
 }
 
 function rawConditionAdjustedPrice(rawNmPrice: number | undefined, condition?: RawCardCondition): number {
@@ -2585,6 +2600,9 @@ export function GemIndexApp() {
   const [replacePopulationForGrader, setReplacePopulationForGrader] = useState(false);
   const [populationImportBusy, setPopulationImportBusy] = useState<"PSA" | "TAG" | null>(null);
   const [populationImportResult, setPopulationImportResult] = useState<PopulationImportSummary | null>(null);
+  const [psaCertNumbersInput, setPsaCertNumbersInput] = useState("");
+  const [psaCertImportBusy, setPsaCertImportBusy] = useState(false);
+  const [psaCertImportResult, setPsaCertImportResult] = useState<PsaCertImportSummary | null>(null);
   const [accountFirstName, setAccountFirstName] = useState("");
   const [accountLastName, setAccountLastName] = useState("");
   const [accountEmail, setAccountEmail] = useState("");
@@ -2801,6 +2819,38 @@ export function GemIndexApp() {
       setMessage(error instanceof Error ? error.message : `${grader} file import failed.`);
     } finally {
       setPopulationImportBusy(null);
+    }
+  }
+
+  async function importPsaByCertNumbers() {
+    const certNumbers = psaCertNumbersInput
+      .split(/\r?\n|,|\s+/)
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+
+    if (!certNumbers.length) {
+      setMessage("Enter at least one PSA cert number.");
+      return;
+    }
+
+    setPsaCertImportBusy(true);
+    try {
+      const out = await api<PsaCertImportSummary>("/api/populations/import-psa-certs", {
+        method: "POST",
+        body: JSON.stringify({
+          certNumbers,
+          replaceExisting: replacePopulationForGrader,
+        }),
+      });
+      setPsaCertImportResult(out);
+      await refresh(user?.role === "ADMIN");
+      setMessage(
+        `PSA cert import complete. Parsed ${out.certsParsed}/${out.certsRequested} cert responses, inserted ${out.inserted}, updated ${out.updated}, unmatched ${out.unmatched}, failed ${out.failed}.`,
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "PSA cert import failed.");
+    } finally {
+      setPsaCertImportBusy(false);
     }
   }
 
@@ -4758,7 +4808,7 @@ export function GemIndexApp() {
         catalogCard?.imageLargeUrl,
       cardName: item.card?.name ?? "Unknown card",
       cardNumber: item.card?.cardNumber,
-      setName: item.card?.setName ?? catalogCard?.setName ?? item.card?.setCode.toUpperCase() ?? "Unknown Set",
+      setName: item.card?.setName ?? catalogCard?.setName ?? setCodeLabel(item.card?.setCode),
       quantity: item.quantity,
       marketValue,
       ownershipType: item.ownershipType,
@@ -4768,7 +4818,7 @@ export function GemIndexApp() {
   const sealedPositionRows = portfolioScopedSealed.map((item) => ({
     id: item.id,
     portfolioName: item.portfolioName ?? "Main Portfolio",
-    label: item.setName ?? item.setCode.toUpperCase(),
+    label: item.setName ?? setCodeLabel(item.setCode),
     imageUrl: item.imageUrl ?? item.product?.imageUrl ?? item.setLogoUrl ?? item.setSymbolUrl,
     productType: formatSealedProductType(item.productType),
     quantity: item.quantity,
@@ -5685,7 +5735,7 @@ export function GemIndexApp() {
                   <div className="section-panel rounded-xl p-3">
                     <p className="text-xs text-slate-300">Set</p>
                     <p className="text-sm font-semibold text-slate-100">
-                      {selectedSealedProduct.setName ?? selectedSealedProduct.setCode.toUpperCase()}
+                      {selectedSealedProduct.setName ?? setCodeLabel(selectedSealedProduct.setCode)}
                     </p>
                   </div>
                   <div className="section-panel rounded-xl p-3">
@@ -5844,7 +5894,7 @@ export function GemIndexApp() {
                       />
                       <span>{item.productName}</span>
                     </span>
-                    <span>{item.setCode.toUpperCase()}</span>
+                    <span>{setCodeLabel(item.setCode)}</span>
                     <span className="text-right">{item.meta} | {item.valueLabel}</span>
                   </button>
                 ))
@@ -6438,7 +6488,7 @@ export function GemIndexApp() {
                   <CardCell imageUrl={card.imageUrl ?? card.imageLargeUrl} name={card.cardName} number={card.cardNumber} />
                 ),
               },
-              { key: "setName", label: "Set", value: (card) => card.setName ?? card.setCode.toUpperCase() },
+              { key: "setName", label: "Set", value: (card) => card.setName ?? setCodeLabel(card.setCode) },
               {
                 key: "rawPrice",
                 label: "Current Raw Price",
@@ -7087,7 +7137,7 @@ export function GemIndexApp() {
                             className="h-14 w-10 shrink-0"
                           />
                           <span>
-                            {item.productName} ({item.setCode.toUpperCase()})
+                            {item.productName} ({setCodeLabel(item.setCode)})
                           </span>
                         </span>
                       ),
@@ -7159,7 +7209,7 @@ export function GemIndexApp() {
                         className="h-14 w-10 shrink-0"
                       />
                       <span>
-                        {item.productName} ({item.setCode.toUpperCase()})
+                        {item.productName} ({setCodeLabel(item.setCode)})
                       </span>
                     </span>
                   ),
@@ -7489,6 +7539,44 @@ export function GemIndexApp() {
                 </p>
               </div>
             ) : null}
+
+            <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+              <p className="text-sm font-semibold text-slate-100">PSA Cert API Import</p>
+              <p className="mt-1 text-xs text-slate-400">
+                Paste PSA cert numbers (one per line). The server calls PSA GetByCertNumber and imports any population values found.
+              </p>
+              <textarea
+                className="mt-2 h-28 w-full rounded border border-white/20 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-400"
+                value={psaCertNumbersInput}
+                onChange={(event) => setPsaCertNumbersInput(event.target.value)}
+                placeholder="12345678&#10;87654321"
+              />
+              <button
+                type="button"
+                className="mt-2 rounded border border-cyan-300/40 bg-cyan-500/20 px-3 py-1 text-sm text-cyan-100 disabled:opacity-60"
+                onClick={importPsaByCertNumbers}
+                disabled={psaCertImportBusy}
+              >
+                {psaCertImportBusy ? "Importing..." : "Import PSA From Cert Numbers"}
+              </button>
+
+              {psaCertImportResult ? (
+                <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-2 text-xs text-slate-200">
+                  <p>
+                    Requested: {psaCertImportResult.certsRequested} | Parsed: {psaCertImportResult.certsParsed} | Inserted: {psaCertImportResult.inserted} | Updated: {psaCertImportResult.updated} | Unmatched: {psaCertImportResult.unmatched} | Failed: {psaCertImportResult.failed}
+                  </p>
+                  {psaCertImportResult.errors.length ? (
+                    <div className="mt-2 space-y-1">
+                      {psaCertImportResult.errors.map((entry) => (
+                        <p key={`${entry.certNumber}-${entry.error}`} className="text-rose-200">
+                          {entry.certNumber}: {entry.error}
+                        </p>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
           </section>
         ) : null}
 
@@ -7584,7 +7672,7 @@ export function GemIndexApp() {
               >
                 {sealedProducts.map((product) => (
                   <option key={product.id} value={product.id}>
-                    {product.productName} ({product.setCode.toUpperCase()})
+                    {product.productName} ({setCodeLabel(product.setCode)})
                   </option>
                 ))}
               </select>
@@ -7673,7 +7761,7 @@ export function GemIndexApp() {
                           className="h-14 w-10 shrink-0"
                         />
                         <span>
-                          {item.productName} ({item.setCode.toUpperCase()})
+                          {item.productName} ({setCodeLabel(item.setCode)})
                         </span>
                       </span>
                     ),
@@ -8062,7 +8150,7 @@ export function GemIndexApp() {
                               <span className="block font-medium">
                                 {card.cardName} {card.cardNumber}
                               </span>
-                              <span className="block text-xs text-slate-400">{card.setCode.toUpperCase()}</span>
+                              <span className="block text-xs text-slate-400">{setCodeLabel(card.setCode)}</span>
                             </span>
                             <span className="text-xs text-slate-300">{investmentMetricsReady ? usd(card.rawPrice) : "Pending"}</span>
                           </button>
@@ -8098,7 +8186,7 @@ export function GemIndexApp() {
                             <span>
                               <span className="block font-medium">{item.productName}</span>
                               <span className="block text-xs text-slate-400">
-                                {item.setName ?? item.setCode.toUpperCase()} | {item.meta}
+                                {item.setName ?? setCodeLabel(item.setCode)} | {item.meta}
                               </span>
                             </span>
                             <span className="text-xs text-slate-300">{item.valueLabel}</span>
