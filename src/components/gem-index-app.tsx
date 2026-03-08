@@ -3962,9 +3962,6 @@ export function GemIndexApp() {
       : sourceStatus === "PARTIAL_LIVE"
         ? "bg-amber-400/15 text-amber-100"
         : "bg-slate-400/15 text-slate-100";
-  const activeHeaderBackground =
-    HEADER_BACKGROUND_OPTIONS.find((option) => option.id === headerBackgroundId) ??
-    HEADER_BACKGROUND_OPTIONS[0];
   const query = normalizeSearchText(cardSearch);
   const matchingCards = query
     ? cards
@@ -8014,40 +8011,7 @@ export function GemIndexApp() {
 
   return (
     <main className="mx-auto flex max-w-7xl flex-col gap-4 p-4 sm:p-8">
-      <section className="relative z-40 min-h-[13rem] overflow-visible rounded-3xl p-4 shadow-xl shadow-black/30 backdrop-blur-md sm:min-h-[14.5rem]">
-        <div className="absolute inset-0 overflow-hidden rounded-3xl" aria-hidden>
-          <div
-            className={`absolute inset-0 ${
-              activeHeaderBackground.id === "DEFAULT"
-                ? "bg-[linear-gradient(160deg,#182f61_0%,#0f2551_45%,#0b1f45_100%)]"
-                : activeHeaderBackground.id === "INVESTIGE_BRAND"
-                  ? "bg-black"
-                : "bg-slate-950"
-            }`}
-          />
-          {activeHeaderBackground.imageUrl ? (
-            <div
-              className={`absolute inset-0 bg-cover bg-top bg-no-repeat ${
-                activeHeaderBackground.id === "INVESTIGE_BRAND" ? "opacity-85" : "opacity-55"
-              }`}
-              style={{
-                backgroundImage: `url(${activeHeaderBackground.imageUrl})`,
-                backgroundPosition:
-                  activeHeaderBackground.id === "INVESTIGE_BRAND" ? "center center" : "center top",
-                backgroundSize:
-                  activeHeaderBackground.id === "INVESTIGE_BRAND" ? "contain" : "cover",
-                backgroundRepeat: "no-repeat",
-              }}
-            />
-          ) : null}
-          <div
-            className={`absolute inset-0 ${
-              activeHeaderBackground.id === "INVESTIGE_BRAND"
-                ? "bg-[linear-gradient(180deg,rgba(2,6,23,0.2),rgba(2,6,23,0.1))]"
-                : "bg-[radial-gradient(circle_at_16%_22%,rgba(214,96,198,0.14),transparent_22%),radial-gradient(circle_at_80%_18%,rgba(52,178,255,0.16),transparent_24%),linear-gradient(180deg,rgba(2,6,23,0.58),rgba(2,6,23,0.34))]"
-            }`}
-          />
-        </div>
+      <section className="relative z-40 min-h-[13rem] overflow-visible rounded-3xl border border-white/10 bg-transparent p-4 sm:min-h-[14.5rem]">
         <div className="relative z-10">
         <div className="flex justify-end">
           <button className="rounded border border-white/25 bg-white/5 px-3 py-1.5 text-sm text-slate-100 hover:bg-white/10" onClick={logout}>
