@@ -143,6 +143,7 @@ type PsaCertImportSummary = {
 };
 
 type HeaderBackgroundId =
+  | "INVESTIGE_BRAND"
   | "DEFAULT"
   | "BULBASAUR_FOREST"
   | "GRENINJA_TIDE"
@@ -402,7 +403,7 @@ const PRIMARY_HOME_TABS: Array<{ id: HomeTab; label: string }> = [
   { id: "SETTINGS", label: "Settings" },
 ];
 
-const HEADER_BACKGROUND_STORAGE_KEY = "gemindex.headerBackgroundId";
+const HEADER_BACKGROUND_STORAGE_KEY = "gemindex.headerBackgroundId.v2";
 
 const HEADER_BACKGROUND_OPTIONS: Array<{
   id: HeaderBackgroundId;
@@ -410,6 +411,12 @@ const HEADER_BACKGROUND_OPTIONS: Array<{
   description: string;
   imageUrl?: string;
 }> = [
+  {
+    id: "INVESTIGE_BRAND",
+    label: "Investige Brand",
+    description: "Primary Investige branded header image.",
+    imageUrl: "/investige-logo.png",
+  },
   {
     id: "DEFAULT",
     label: "Default Glow",
@@ -2589,7 +2596,7 @@ export function GemIndexApp() {
   const [cardSearch, setCardSearch] = useState("");
   const [searchDropdownOpen, setSearchDropdownOpen] = useState(false);
   const [searchDropdownIndex, setSearchDropdownIndex] = useState(0);
-  const [headerBackgroundId, setHeaderBackgroundId] = useState<HeaderBackgroundId>("DEFAULT");
+  const [headerBackgroundId, setHeaderBackgroundId] = useState<HeaderBackgroundId>("INVESTIGE_BRAND");
   const [settingsSubsection, setSettingsSubsection] = useState<
     "ACCOUNT" | "HEADER_BACKGROUND" | "DATA_SOURCES" | "BILLING_INFORMATION" | "ALERTS"
   >("ACCOUNT");
@@ -3724,7 +3731,7 @@ export function GemIndexApp() {
           <div className="flex flex-col items-center gap-3 text-center">
             <h1 className="gem-title gem-title-landing text-5xl font-bold sm:text-6xl">Investige</h1>
             <Image
-              src="/gemindex-logo-v5.png"
+              src="/investige-logo.png"
               alt="Investige app icon"
               width={420}
               height={420}
@@ -8013,19 +8020,29 @@ export function GemIndexApp() {
             className={`absolute inset-0 ${
               activeHeaderBackground.id === "DEFAULT"
                 ? "bg-[linear-gradient(160deg,#182f61_0%,#0f2551_45%,#0b1f45_100%)]"
+                : activeHeaderBackground.id === "INVESTIGE_BRAND"
+                  ? "bg-black"
                 : "bg-slate-950"
             }`}
           />
           {activeHeaderBackground.imageUrl ? (
             <div
-              className="absolute inset-0 bg-cover bg-top bg-no-repeat opacity-55"
+              className={`absolute inset-0 bg-cover bg-top bg-no-repeat ${
+                activeHeaderBackground.id === "INVESTIGE_BRAND" ? "opacity-85" : "opacity-55"
+              }`}
               style={{
                 backgroundImage: `url(${activeHeaderBackground.imageUrl})`,
                 backgroundPosition: "center top",
               }}
             />
           ) : null}
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_16%_22%,rgba(214,96,198,0.14),transparent_22%),radial-gradient(circle_at_80%_18%,rgba(52,178,255,0.16),transparent_24%),linear-gradient(180deg,rgba(2,6,23,0.58),rgba(2,6,23,0.34))]" />
+          <div
+            className={`absolute inset-0 ${
+              activeHeaderBackground.id === "INVESTIGE_BRAND"
+                ? "bg-[linear-gradient(180deg,rgba(2,6,23,0.45),rgba(2,6,23,0.25))]"
+                : "bg-[radial-gradient(circle_at_16%_22%,rgba(214,96,198,0.14),transparent_22%),radial-gradient(circle_at_80%_18%,rgba(52,178,255,0.16),transparent_24%),linear-gradient(180deg,rgba(2,6,23,0.58),rgba(2,6,23,0.34))]"
+            }`}
+          />
         </div>
         <div className="relative z-10">
         <div className="flex justify-end">
@@ -8037,7 +8054,7 @@ export function GemIndexApp() {
           <div className="relative flex flex-col items-center gap-3 text-center sm:min-h-[5.5rem]">
             <div className="flex flex-col items-center justify-center gap-0 sm:absolute sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2">
               <Image
-                src="/gemindex-logo-v5.png"
+                src="/investige-logo.png"
                 alt="Investige app icon"
                 width={420}
                 height={420}
