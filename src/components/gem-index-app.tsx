@@ -415,7 +415,7 @@ const HEADER_BACKGROUND_OPTIONS: Array<{
     id: "INVESTIGE_BRAND",
     label: "Investige Brand",
     description: "Primary Investige branded header image.",
-    imageUrl: "/investige-logo.png",
+    imageUrl: "/investige-logo-v2.png",
   },
   {
     id: "DEFAULT",
@@ -3731,7 +3731,7 @@ export function GemIndexApp() {
           <div className="flex flex-col items-center gap-3 text-center">
             <h1 className="gem-title gem-title-landing text-5xl font-bold sm:text-6xl">Investige</h1>
             <Image
-              src="/investige-logo.png"
+              src="/investige-logo-v2.png"
               alt="Investige app icon"
               width={420}
               height={420}
@@ -8054,7 +8054,7 @@ export function GemIndexApp() {
           <div className="relative flex flex-col items-center gap-3 text-center sm:min-h-[5.5rem]">
             <div className="flex flex-col items-center justify-center gap-0 sm:absolute sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2">
               <Image
-                src="/investige-logo.png"
+                src="/investige-logo-v2.png"
                 alt="Investige app icon"
                 width={420}
                 height={420}
