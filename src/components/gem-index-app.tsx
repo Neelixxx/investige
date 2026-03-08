@@ -8011,7 +8011,7 @@ export function GemIndexApp() {
 
   return (
     <main className="mx-auto flex max-w-7xl flex-col gap-4 p-4 sm:p-8">
-      <section className="relative z-40 min-h-[13rem] overflow-visible rounded-3xl border border-white/10 bg-transparent p-4 sm:min-h-[14.5rem]">
+      <section className="relative z-40 min-h-[24rem] overflow-visible rounded-3xl border border-white/10 bg-transparent p-4 sm:min-h-[30rem]">
         <div className="relative z-10">
         <div className="flex justify-end">
           <button className="rounded border border-white/25 bg-white/5 px-3 py-1.5 text-sm text-slate-100 hover:bg-white/10" onClick={logout}>
@@ -8019,7 +8019,7 @@ export function GemIndexApp() {
           </button>
         </div>
         <div className="flex flex-col gap-3">
-          <div className="relative flex flex-col items-center gap-3 text-center sm:min-h-[5.5rem]">
+          <div className="relative flex flex-col items-center gap-3 text-center sm:min-h-[20rem]">
             <div className="flex flex-col items-center justify-center gap-0 sm:absolute sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2">
               <Image
                 src="/investige-logo-v3.png"
@@ -8027,7 +8027,7 @@ export function GemIndexApp() {
                 width={1260}
                 height={420}
                 priority
-                className="h-24 w-auto object-contain drop-shadow-[0_10px_20px_rgba(0,0,0,0.35)] sm:h-28 lg:h-32"
+                className="h-56 w-auto object-contain drop-shadow-[0_10px_20px_rgba(0,0,0,0.35)] sm:h-64 lg:h-72"
               />
             </div>
             <div className="flex flex-col gap-1 text-center text-sm text-slate-300 sm:ml-auto sm:items-end sm:text-right">
