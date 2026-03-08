@@ -5,9 +5,21 @@ import { runSyncJob } from "./sync";
 import type { SyncJobRecord, SyncJobType, SyncTaskRecord } from "./types";
 
 let workerRunning = false;
+const STALE_LOCK_MINUTES = 90;
 
 function plusMinutes(base: Date, minutes: number): string {
   return new Date(base.getTime() + minutes * 60_000).toISOString();
+}
+
+function isOlderThan(iso: string | undefined, minutes: number): boolean {
+  if (!iso) {
+    return false;
+  }
+  const timestamp = new Date(iso).getTime();
+  if (!Number.isFinite(timestamp)) {
+    return false;
+  }
+  return Date.now() - timestamp > minutes * 60_000;
 }
 
 function summarize(result: Record<string, number>): string {
@@ -165,6 +177,30 @@ export async function runWorkerTick(options?: { source?: string; maxTasks?: numb
     await cleanupAuthTokens();
 
     await withDbMutation((db) => {
+      db.syncTasks.forEach((task) => {
+        if (task.status !== "RUNNING") {
+          return;
+        }
+        if (!isOlderThan(task.startedAt ?? task.createdAt, STALE_LOCK_MINUTES)) {
+          return;
+        }
+        task.status = "FAILED";
+        task.finishedAt = new Date().toISOString();
+        task.error = `Recovered stale RUNNING task lock after ${STALE_LOCK_MINUTES}m timeout.`;
+      });
+
+      db.syncJobs.forEach((job) => {
+        if (!job.running) {
+          return;
+        }
+        if (!isOlderThan(job.lastRunAt, STALE_LOCK_MINUTES)) {
+          return;
+        }
+        job.running = false;
+        job.lastStatus = "FAILED";
+        job.lastError = `Recovered stale RUNNING job lock after ${STALE_LOCK_MINUTES}m timeout.`;
+      });
+
       db.sync.lastWorkerRunAt = new Date().toISOString();
     });
 

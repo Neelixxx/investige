@@ -16,22 +16,36 @@ const schema = z.object({
   provider: z.enum(["POKEMONTCG", "TCGPLAYER_DIRECT"]).optional(),
 });
 
+function isCronAuthorized(request: NextRequest): boolean {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) {
+    return false;
+  }
+  const header = request.headers.get("x-cron-secret");
+  const query = request.nextUrl.searchParams.get("token");
+  return header === secret || query === secret;
+}
+
 export async function POST(request: NextRequest) {
   const requestId = requestIdFromRequest(request);
-  let user;
-  try {
-    user = await requireAdmin(request);
-  } catch (error) {
-    if (error instanceof Error && error.message === "FORBIDDEN") {
-      return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+  const cronAuthorized = isCronAuthorized(request);
+  let user: Awaited<ReturnType<typeof requireAdmin>> | null = null;
+
+  if (!cronAuthorized) {
+    try {
+      user = await requireAdmin(request);
+    } catch (error) {
+      if (error instanceof Error && error.message === "FORBIDDEN") {
+        return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+      }
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!hasFeature(user, "LIVE_SYNC_QUEUE")) {
-    return NextResponse.json(
-      { error: featureErrorMessage(user, "LIVE_SYNC_QUEUE") },
-      { status: 402 },
-    );
+    if (!user || !hasFeature(user, "LIVE_SYNC_QUEUE")) {
+      return NextResponse.json(
+        { error: user ? featureErrorMessage(user, "LIVE_SYNC_QUEUE") : "Upgrade required." },
+        { status: 402 },
+      );
+    }
   }
 
   const json = await request.json().catch(() => ({}));
@@ -39,16 +53,20 @@ export async function POST(request: NextRequest) {
   if (!parse.success) {
     return NextResponse.json({ error: parse.error.flatten() }, { status: 400 });
   }
-  if (parse.data.provider === "TCGPLAYER_DIRECT" && !hasFeature(user, "DIRECT_TCGPLAYER_SYNC")) {
+  if (
+    parse.data.provider === "TCGPLAYER_DIRECT" &&
+    !cronAuthorized &&
+    (!user || !hasFeature(user, "DIRECT_TCGPLAYER_SYNC"))
+  ) {
     return NextResponse.json(
-      { error: featureErrorMessage(user, "DIRECT_TCGPLAYER_SYNC") },
+      { error: user ? featureErrorMessage(user, "DIRECT_TCGPLAYER_SYNC") : "Upgrade required." },
       { status: 402 },
     );
   }
 
   const task = await enqueueSyncTask({
     type: parse.data.provider === "TCGPLAYER_DIRECT" ? "TCGPLAYER_DIRECT_SYNC" : "SALES_SYNC",
-    requestedBy: user.id,
+    requestedBy: user?.id ?? "cron",
     options: {
       pageLimit: parse.data.pageLimit,
       cardLimit: parse.data.cardLimit,
@@ -56,7 +74,7 @@ export async function POST(request: NextRequest) {
   });
 
   if (parse.data.runNow) {
-    const worker = await runWorkerTick({ source: "manual" });
+    const worker = await runWorkerTick({ source: cronAuthorized ? "cron" : "manual" });
     logger.info(
       {
         requestId,
@@ -64,6 +82,7 @@ export async function POST(request: NextRequest) {
         provider: parse.data.provider ?? "POKEMONTCG",
         runNow: true,
         worker,
+        source: cronAuthorized ? "cron" : "manual",
       },
       "sales sync enqueued",
     );
@@ -76,6 +95,7 @@ export async function POST(request: NextRequest) {
       taskId: task.id,
       provider: parse.data.provider ?? "POKEMONTCG",
       runNow: false,
+      source: cronAuthorized ? "cron" : "manual",
     },
     "sales sync enqueued",
   );

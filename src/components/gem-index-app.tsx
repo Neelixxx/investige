@@ -3729,7 +3729,6 @@ export function GemIndexApp() {
       <main className="mx-auto max-w-3xl p-4 sm:p-8">
         <section className="rounded-3xl bg-[radial-gradient(circle_at_18%_20%,rgba(214,96,198,0.14),transparent_24%),radial-gradient(circle_at_82%_18%,rgba(52,178,255,0.16),transparent_28%),linear-gradient(150deg,#182f61_0%,#0f2551_45%,#0b1f45_100%)] p-5 text-white shadow-xl shadow-black/30">
           <div className="flex flex-col items-center gap-3 text-center">
-            <h1 className="gem-title gem-title-landing text-5xl font-bold sm:text-6xl">Investige</h1>
             <Image
               src="/investige-logo-v3.png"
               alt="Investige logo"
@@ -3738,7 +3737,7 @@ export function GemIndexApp() {
               priority
               className="h-20 w-auto object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.35)] sm:h-24"
             />
-            <p className="text-sm text-cyan-100">Create your account or sign in to access Investige.</p>
+            <p className="text-sm text-cyan-100">Register or Sign In</p>
           </div>
 
           <div className="mt-5 rounded-2xl bg-slate-950/20 p-4 text-slate-100 backdrop-blur-md sm:p-5">
@@ -3954,14 +3953,7 @@ export function GemIndexApp() {
     );
   }
 
-  const sourceStatus = dataQuality?.status ?? "SEEDED";
   const investmentMetricsReady = dataQuality?.investmentMetricsReady ?? false;
-  const sourceBadgeClass =
-    sourceStatus === "LIVE_READY"
-      ? "bg-emerald-400/15 text-emerald-100"
-      : sourceStatus === "PARTIAL_LIVE"
-        ? "bg-amber-400/15 text-amber-100"
-        : "bg-slate-400/15 text-slate-100";
   const query = normalizeSearchText(cardSearch);
   const matchingCards = query
     ? cards
@@ -4901,19 +4893,6 @@ export function GemIndexApp() {
       whyItMatters: "This helps users find cards where grading may create the most immediate value upside right now.",
       methodology:
         "Ranks tracked cards by estimated grading edge, using the spread between the current raw price and projected premium from PSA 10 or TAG 10 outcomes.",
-    },
-    {
-      id: "data-source",
-      title: "Data Source Status",
-      value: dataQuality?.label ?? "Unknown",
-      status: dataQuality?.status === "LIVE_READY" ? "Live" : dataQuality?.status === "PARTIAL_LIVE" ? "Mixed" : "Demo",
-      summary: "Tells the user how much of the dashboard is live versus seeded demo data.",
-      context:
-        dataQuality?.blockingReason ??
-        "Live sync is available when enough current catalog, sales, and population data are loaded.",
-      whyItMatters: "Users can trust live-backed metrics more confidently and know when values are still illustrative.",
-      methodology:
-        "Based on internal data-quality thresholds for live sets, cards, sales coverage, and population coverage. Until those thresholds are met, the app labels results as mixed or demo.",
     },
   ];
   const positiveArbitrageCount = arbitrageRows.filter((card) => card.gradingArbitrageUsd > 0).length;
@@ -8011,43 +7990,36 @@ export function GemIndexApp() {
 
   return (
     <main className="mx-auto flex max-w-7xl flex-col gap-4 p-4 sm:p-8">
-      <section className="relative z-40 min-h-[24rem] overflow-visible rounded-3xl border border-white/10 bg-transparent p-4 sm:min-h-[30rem]">
+      <section className="relative z-40 overflow-visible rounded-3xl border border-white/10 bg-transparent p-3 sm:p-4">
         <div className="relative z-10">
         <div className="flex justify-end">
           <button className="rounded border border-white/25 bg-white/5 px-3 py-1.5 text-sm text-slate-100 hover:bg-white/10" onClick={logout}>
             Logout
           </button>
         </div>
-        <div className="flex flex-col gap-3">
-          <div className="relative flex flex-col items-center gap-3 text-center sm:min-h-[20rem]">
-            <div className="flex flex-col items-center justify-center gap-0 sm:absolute sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2">
-              <Image
-                src="/investige-logo-v3.png"
-                alt="Investige logo"
-                width={1260}
-                height={420}
-                priority
-                className="h-56 w-auto object-contain drop-shadow-[0_10px_20px_rgba(0,0,0,0.35)] sm:h-64 lg:h-72"
-              />
-            </div>
-            <div className="flex flex-col gap-1 text-center text-sm text-slate-300 sm:ml-auto sm:items-end sm:text-right">
+        <div className="flex flex-col gap-2 pt-1">
+          <div className="flex justify-end">
+            <div className="flex flex-col gap-1 text-center text-sm text-slate-300 sm:items-end sm:text-right">
               <p>
                 {user.name} ({user.role}) | {sync?.subscription.tier ?? user.subscriptionTier} plan
               </p>
               <p className="text-xs" data-testid="plan-badge">
                 Status: {sync?.subscription.status ?? user.subscriptionStatus}
               </p>
-              <p className="text-xs">
-                <span
-                  className={`inline-flex rounded-full px-2 py-0.5 font-medium ${sourceBadgeClass}`}
-                  data-testid="data-source-badge"
-                >
-                  Data Source: {dataQuality?.label ?? "Seeded"}
-                </span>
-              </p>
             </div>
           </div>
-            <div className="relative z-[60] mx-auto mt-6 w-full max-w-[24rem] sm:mt-8">
+          <div className="relative flex flex-col items-center gap-2 text-center">
+            <div className="flex flex-col items-center justify-center gap-0">
+              <Image
+                src="/investige-logo-v3.png"
+                alt="Investige logo"
+                width={1260}
+                height={420}
+                priority
+                className="h-28 w-auto object-contain drop-shadow-[0_10px_20px_rgba(0,0,0,0.35)] sm:h-32 lg:h-36"
+              />
+            </div>
+            <div className="relative z-[60] mx-auto mt-0.5 w-full max-w-[18rem] sm:mt-1 sm:max-w-[20rem]">
               <input
                 id="global-search"
               value={cardSearch}
@@ -8187,6 +8159,7 @@ export function GemIndexApp() {
             ) : null}
           </div>
           {message ? <p className="text-sm text-slate-200">{message}</p> : null}
+        </div>
         </div>
         </div>
       </section>
