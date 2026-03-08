@@ -403,7 +403,7 @@ const PRIMARY_HOME_TABS: Array<{ id: HomeTab; label: string }> = [
   { id: "SETTINGS", label: "Settings" },
 ];
 
-const HEADER_BACKGROUND_STORAGE_KEY = "gemindex.headerBackgroundId.v2";
+const HEADER_BACKGROUND_STORAGE_KEY = "gemindex.headerBackgroundId.v3";
 
 const HEADER_BACKGROUND_OPTIONS: Array<{
   id: HeaderBackgroundId;
@@ -415,7 +415,7 @@ const HEADER_BACKGROUND_OPTIONS: Array<{
     id: "INVESTIGE_BRAND",
     label: "Investige Brand",
     description: "Primary Investige branded header image.",
-    imageUrl: "/investige-logo-v2.png",
+    imageUrl: "/investige-logo-v3.png",
   },
   {
     id: "DEFAULT",
@@ -3731,12 +3731,12 @@ export function GemIndexApp() {
           <div className="flex flex-col items-center gap-3 text-center">
             <h1 className="gem-title gem-title-landing text-5xl font-bold sm:text-6xl">Investige</h1>
             <Image
-              src="/investige-logo-v2.png"
-              alt="Investige app icon"
-              width={420}
+              src="/investige-logo-v3.png"
+              alt="Investige logo"
+              width={1260}
               height={420}
               priority
-              className="h-40 w-40 object-contain drop-shadow-[0_10px_24px_rgba(0,0,0,0.35)] sm:h-48 sm:w-48"
+              className="h-20 w-auto object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.35)] sm:h-24"
             />
             <p className="text-sm text-cyan-100">Create your account or sign in to access Investige.</p>
           </div>
@@ -8032,14 +8032,18 @@ export function GemIndexApp() {
               }`}
               style={{
                 backgroundImage: `url(${activeHeaderBackground.imageUrl})`,
-                backgroundPosition: "center top",
+                backgroundPosition:
+                  activeHeaderBackground.id === "INVESTIGE_BRAND" ? "center center" : "center top",
+                backgroundSize:
+                  activeHeaderBackground.id === "INVESTIGE_BRAND" ? "contain" : "cover",
+                backgroundRepeat: "no-repeat",
               }}
             />
           ) : null}
           <div
             className={`absolute inset-0 ${
               activeHeaderBackground.id === "INVESTIGE_BRAND"
-                ? "bg-[linear-gradient(180deg,rgba(2,6,23,0.45),rgba(2,6,23,0.25))]"
+                ? "bg-[linear-gradient(180deg,rgba(2,6,23,0.2),rgba(2,6,23,0.1))]"
                 : "bg-[radial-gradient(circle_at_16%_22%,rgba(214,96,198,0.14),transparent_22%),radial-gradient(circle_at_80%_18%,rgba(52,178,255,0.16),transparent_24%),linear-gradient(180deg,rgba(2,6,23,0.58),rgba(2,6,23,0.34))]"
             }`}
           />
@@ -8054,12 +8058,12 @@ export function GemIndexApp() {
           <div className="relative flex flex-col items-center gap-3 text-center sm:min-h-[5.5rem]">
             <div className="flex flex-col items-center justify-center gap-0 sm:absolute sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2">
               <Image
-                src="/investige-logo-v2.png"
-                alt="Investige app icon"
-                width={420}
+                src="/investige-logo-v3.png"
+                alt="Investige logo"
+                width={1260}
                 height={420}
                 priority
-                className="h-28 w-28 object-contain drop-shadow-[0_10px_20px_rgba(0,0,0,0.35)] sm:h-32 sm:w-32"
+                className="h-24 w-auto object-contain drop-shadow-[0_10px_20px_rgba(0,0,0,0.35)] sm:h-28 lg:h-32"
               />
             </div>
             <div className="flex flex-col gap-1 text-center text-sm text-slate-300 sm:ml-auto sm:items-end sm:text-right">
