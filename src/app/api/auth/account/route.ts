@@ -4,6 +4,8 @@ import { z } from "zod";
 import {
   createSessionToken,
   hashPassword,
+  isPasswordStrong,
+  PASSWORD_REQUIREMENTS_MESSAGE,
   publicUser,
   requireUser,
   setSessionCookie,
@@ -35,10 +37,10 @@ const accountUpdateSchema = z
       });
     }
 
-    if (value.newPassword.trim().length < 8) {
+    if (!isPasswordStrong(value.newPassword.trim())) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: "New password must be at least 8 characters.",
+        message: PASSWORD_REQUIREMENTS_MESSAGE,
         path: ["newPassword"],
       });
     }

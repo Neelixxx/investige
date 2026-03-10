@@ -10,6 +10,8 @@ const SESSION_COOKIE = "gemindex_session";
 export const SESSION_COOKIE_NAME = SESSION_COOKIE;
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 14;
 const FALLBACK_SESSION_SECRET = "gemindex-dev-session-secret-change-me";
+export const PASSWORD_REQUIREMENTS_MESSAGE =
+  "Password must be at least 12 characters and include an uppercase letter, lowercase letter, number, and special character.";
 
 type SessionPayload = {
   sub: string;
@@ -45,6 +47,16 @@ export async function hashPassword(password: string): Promise<string> {
 
 export async function verifyPassword(password: string, hash: string): Promise<boolean> {
   return bcrypt.compare(password, hash);
+}
+
+export function isPasswordStrong(password: string): boolean {
+  return (
+    password.length >= 12 &&
+    /[A-Z]/.test(password) &&
+    /[a-z]/.test(password) &&
+    /\d/.test(password) &&
+    /[^A-Za-z0-9]/.test(password)
+  );
 }
 
 export async function createSessionToken(user: UserRecord): Promise<string> {

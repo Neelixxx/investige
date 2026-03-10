@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { confirmPasswordReset } from "@/lib/account-recovery";
+import { isPasswordStrong, PASSWORD_REQUIREMENTS_MESSAGE } from "@/lib/auth";
 import { createSessionToken, publicUser, setSessionCookie } from "@/lib/auth";
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -9,7 +10,7 @@ export const runtime = "nodejs";
 
 const schema = z.object({
   token: z.string().min(12),
-  newPassword: z.string().min(8).max(120),
+  newPassword: z.string().max(120).refine(isPasswordStrong, PASSWORD_REQUIREMENTS_MESSAGE),
 });
 
 export async function POST(request: NextRequest) {
@@ -29,7 +30,10 @@ export async function POST(request: NextRequest) {
   const json = await request.json().catch(() => ({}));
   const parse = schema.safeParse(json);
   if (!parse.success) {
-    return NextResponse.json({ error: parse.error.flatten() }, { status: 400 });
+    return NextResponse.json(
+      { error: parse.error.issues[0]?.message ?? "Could not reset password." },
+      { status: 400 },
+    );
   }
 
   const user = await confirmPasswordReset(parse.data.token.trim(), parse.data.newPassword);

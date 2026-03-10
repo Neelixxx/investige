@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { hashPassword, publicUser } from "@/lib/auth";
+import { hashPassword, isPasswordStrong, PASSWORD_REQUIREMENTS_MESSAGE, publicUser } from "@/lib/auth";
 import { issueEmailVerification } from "@/lib/account-recovery";
 import { nextId, withDbMutation } from "@/lib/db";
 import { plusDays } from "@/lib/entitlements";
@@ -20,8 +20,8 @@ const registerSchema = z.object({
     .max(32)
     .regex(/^[a-zA-Z0-9._-]+$/, "Username can only include letters, numbers, dot, underscore, and hyphen"),
   email: z.string().email().max(160),
-  password: z.string().min(8).max(120),
-  passwordConfirm: z.string().min(8).max(120),
+  password: z.string().max(120).refine(isPasswordStrong, PASSWORD_REQUIREMENTS_MESSAGE),
+  passwordConfirm: z.string().max(120),
 }).refine((value) => value.password === value.passwordConfirm, {
   message: "Passwords do not match.",
   path: ["passwordConfirm"],
@@ -55,7 +55,10 @@ export async function POST(request: NextRequest) {
   const parse = registerSchema.safeParse(json);
 
   if (!parse.success) {
-    return NextResponse.json({ error: parse.error.flatten() }, { status: 400 });
+    return NextResponse.json(
+      { error: parse.error.issues[0]?.message ?? "Could not create account." },
+      { status: 400 },
+    );
   }
 
   const payload = parse.data;

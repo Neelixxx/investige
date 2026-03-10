@@ -3,6 +3,11 @@
 import Image from "next/image";
 import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 
+import {
+  classifyPokemonGalleryProduct,
+  DEFAULT_GALLERY_TYPE_OPTIONS,
+  type PokemonGalleryTypeOption,
+} from "@/lib/pokemon-product-gallery-shared";
 import type { DashboardData, DataQualitySnapshot, PublicUser, SetMetrics, SyncState } from "@/lib/types";
 
 type CardApi = {
@@ -140,6 +145,17 @@ type PsaCertImportSummary = {
   failed: number;
   totalPopulationReports: number;
   errors: Array<{ certNumber: string; error: string }>;
+};
+
+type PokemonGalleryTypeApi = PokemonGalleryTypeOption & {
+  count: number;
+};
+
+type PokemonProductGalleryResponse = {
+  source: "POKEMON_DOT_COM" | "CACHE" | "FALLBACK";
+  evaluatedAt: string;
+  totalProducts: number;
+  types: PokemonGalleryTypeApi[];
 };
 
 type HeaderBackgroundId =
@@ -403,7 +419,8 @@ const PRIMARY_HOME_TABS: Array<{ id: HomeTab; label: string }> = [
   { id: "SETTINGS", label: "Settings" },
 ];
 
-const HEADER_BACKGROUND_STORAGE_KEY = "gemindex.headerBackgroundId.v3";
+const INVESTIGE_LOGO_SRC = "/investige-logo.png?v=20260310-1";
+const HEADER_BACKGROUND_STORAGE_KEY = "gemindex.headerBackgroundId.v4";
 
 const HEADER_BACKGROUND_OPTIONS: Array<{
   id: HeaderBackgroundId;
@@ -415,7 +432,7 @@ const HEADER_BACKGROUND_OPTIONS: Array<{
     id: "INVESTIGE_BRAND",
     label: "Investige Brand",
     description: "Primary Investige branded header image.",
-    imageUrl: "/investige-logo-v3.png",
+    imageUrl: INVESTIGE_LOGO_SRC,
   },
   {
     id: "DEFAULT",
@@ -490,6 +507,12 @@ const RAW_CARD_CONDITION_MULTIPLIERS: Record<RawCardCondition, number> = {
   HP: 0.7,
   DMG: 0.5,
 };
+const PASSWORD_POLICY_HINT =
+  "At least 12 characters with uppercase, lowercase, number, and special character.";
+const DEFAULT_GALLERY_TYPE_API_OPTIONS: PokemonGalleryTypeApi[] = DEFAULT_GALLERY_TYPE_OPTIONS.map((option) => ({
+  ...option,
+  count: 0,
+}));
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const controller = new AbortController();
@@ -580,6 +603,28 @@ function formatSealedProductType(value?: string): string {
     .replace(/_/g, " ")
     .toLowerCase()
     .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function galleryTypeKeyForProduct(product: Pick<SealedCatalogProduct, "productName" | "productType">): string {
+  const classified = classifyPokemonGalleryProduct(product.productName);
+  if (classified.key !== "OTHER") {
+    return classified.key;
+  }
+
+  switch (product.productType) {
+    case "BOOSTER_BOX":
+      return "BOOSTER_BOX";
+    case "ELITE_TRAINER_BOX":
+      return "ELITE_TRAINER_BOX";
+    case "COLLECTION_BOX":
+      return "COLLECTION_BOX";
+    case "TIN":
+      return "TIN";
+    case "BLISTER":
+      return "BLISTER";
+    default:
+      return "OTHER";
+  }
 }
 
 function pctOfSetValue(productPrice: number | undefined, totalSetValue: number): number | undefined {
@@ -2577,10 +2622,9 @@ export function GemIndexApp() {
   const [quickRawSelectedCardId, setQuickRawSelectedCardId] = useState("");
   const [quickRawCondition, setQuickRawCondition] = useState<RawCardCondition>("NM");
   const [quickSealedSetName, setQuickSealedSetName] = useState("");
-  const [quickSealedType, setQuickSealedType] = useState<
-    "ALL" | "BOOSTER_BOX" | "ELITE_TRAINER_BOX" | "COLLECTION_BOX" | "TIN" | "BLISTER" | "OTHER"
-  >("ALL");
+  const [quickSealedType, setQuickSealedType] = useState<"ALL" | string>("ALL");
   const [quickSealedSelectedProductId, setQuickSealedSelectedProductId] = useState("");
+  const [pokemonGalleryTypes, setPokemonGalleryTypes] = useState<PokemonGalleryTypeApi[]>(DEFAULT_GALLERY_TYPE_API_OPTIONS);
   const [quickGradedQuery, setQuickGradedQuery] = useState("");
   const [quickGradedSelectedValue, setQuickGradedSelectedValue] = useState("");
   const [quickGradedGrader, setQuickGradedGrader] = useState<"PSA" | "TAG">("PSA");
@@ -2671,7 +2715,7 @@ export function GemIndexApp() {
   }
 
   async function refresh(includeOutbox = false) {
-    const [d, c, s, y, p, co, wi, sp, se, sw, al] = await Promise.all([
+    const [d, c, s, y, p, co, wi, sp, se, sw, al, gallery] = await Promise.all([
       api<DashboardData>("/api/dashboard"),
       api<CardsResponse>("/api/cards"),
       api<SetsResponse>("/api/sets"),
@@ -2683,6 +2727,12 @@ export function GemIndexApp() {
       api<{ items: SealedItem[] }>("/api/sealed"),
       api<{ items: SealedWishlistItem[] }>("/api/sealed-wishlist"),
       api<AlertsResponse>("/api/alerts"),
+      api<PokemonProductGalleryResponse>("/api/pokemon-product-gallery").catch(() => ({
+        source: "FALLBACK" as const,
+        evaluatedAt: new Date().toISOString(),
+        totalProducts: 0,
+        types: DEFAULT_GALLERY_TYPE_API_OPTIONS,
+      })),
     ]);
     setDashboard(d);
     setCards(c.items);
@@ -2696,6 +2746,7 @@ export function GemIndexApp() {
     setSealedProducts(sp.items);
     setSealed(se.items);
     setSealedWishlist(sw.items);
+    setPokemonGalleryTypes(gallery.types.length ? gallery.types : DEFAULT_GALLERY_TYPE_API_OPTIONS);
     setAlertRules(al.rules);
     setAlertEvents(al.events);
     setAlertUnreadCount(al.unreadCount);
@@ -3730,11 +3781,12 @@ export function GemIndexApp() {
         <section className="rounded-3xl bg-[radial-gradient(circle_at_18%_20%,rgba(214,96,198,0.14),transparent_24%),radial-gradient(circle_at_82%_18%,rgba(52,178,255,0.16),transparent_28%),linear-gradient(150deg,#182f61_0%,#0f2551_45%,#0b1f45_100%)] px-4 py-3 text-white shadow-xl shadow-black/30 sm:px-5 sm:py-4">
           <div className="flex flex-col items-center gap-2 text-center">
             <Image
-              src="/investige-logo-v3.png"
+              src={INVESTIGE_LOGO_SRC}
               alt="Investige logo"
               width={1260}
               height={420}
               priority
+              unoptimized
               className="h-28 w-auto object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.35)] sm:h-32"
             />
             <p className="text-sm text-cyan-100">Register or Sign In</p>
@@ -3808,6 +3860,8 @@ export function GemIndexApp() {
                       autoComplete="new-password"
                       className="w-full rounded-lg border border-white/20 bg-slate-900/60 px-3 py-2 text-slate-100 placeholder:text-slate-400 outline-none focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-400/20"
                       type="password"
+                      minLength={12}
+                      title={PASSWORD_POLICY_HINT}
                       value={regPassword}
                       onChange={(e) => setRegPassword(e.target.value)}
                       placeholder="Create password"
@@ -3818,12 +3872,15 @@ export function GemIndexApp() {
                       autoComplete="new-password"
                       className="w-full rounded-lg border border-white/20 bg-slate-900/60 px-3 py-2 text-slate-100 placeholder:text-slate-400 outline-none focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-400/20"
                       type="password"
+                      minLength={12}
+                      title={PASSWORD_POLICY_HINT}
                       value={regPasswordConfirm}
                       onChange={(e) => setRegPasswordConfirm(e.target.value)}
                       placeholder="Confirm password"
                       required
                     />
                   </div>
+                  <p className="text-xs text-slate-300">{PASSWORD_POLICY_HINT}</p>
                 </>
               ) : (
                 <>
@@ -3904,10 +3961,13 @@ export function GemIndexApp() {
                   autoComplete="new-password"
                   className="w-full rounded-lg border border-white/20 bg-slate-900/60 px-3 py-2 text-slate-100 placeholder:text-slate-400 outline-none focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-400/20"
                   type="password"
+                  minLength={12}
+                  title={PASSWORD_POLICY_HINT}
                   value={recoveryNewPassword}
                   onChange={(e) => setRecoveryNewPassword(e.target.value)}
                   placeholder="New password"
                 />
+                <p className="-mt-1 text-xs text-slate-300">{PASSWORD_POLICY_HINT}</p>
                 <button
                   className="rounded-lg border border-cyan-300/40 bg-cyan-500/20 px-3 py-2 text-cyan-100 hover:bg-cyan-500/30"
                   type="button"
@@ -4166,7 +4226,7 @@ export function GemIndexApp() {
       const setMatch = quickSealedSetName
         ? `${product.setName} ${product.setCode}`.toLowerCase().includes(normalizeSearchText(quickSealedSetName))
         : true;
-      const typeMatch = quickSealedType === "ALL" ? true : product.productType === quickSealedType;
+      const typeMatch = quickSealedType === "ALL" ? true : galleryTypeKeyForProduct(product) === quickSealedType;
       return setMatch && typeMatch;
     })
     .slice(0, 40);
@@ -4615,27 +4675,16 @@ export function GemIndexApp() {
                 <select
                   className="w-full rounded border border-white/20 bg-slate-900/60 px-3 py-2 text-sm text-slate-100"
                   value={quickSealedType}
-                  onChange={(event) =>
-                    setQuickSealedType(
-                      event.target.value as
-                        | "ALL"
-                        | "BOOSTER_BOX"
-                        | "ELITE_TRAINER_BOX"
-                        | "COLLECTION_BOX"
-                        | "TIN"
-                        | "BLISTER"
-                        | "OTHER",
-                    )
-                  }
+                  onChange={(event) => setQuickSealedType(event.target.value)}
                   disabled={!can("PORTFOLIO_TRACKING")}
                 >
                   <option value="ALL">All Types</option>
-                  <option value="BOOSTER_BOX">Booster Box</option>
-                  <option value="ELITE_TRAINER_BOX">ETB</option>
-                  <option value="BLISTER">Booster Pack / Blister</option>
-                  <option value="COLLECTION_BOX">Collection Box</option>
-                  <option value="TIN">Tin</option>
-                  <option value="OTHER">Other</option>
+                  {pokemonGalleryTypes.map((option) => (
+                    <option key={option.key} value={option.key}>
+                      {option.label}
+                      {option.count > 0 ? ` (${option.count})` : ""}
+                    </option>
+                  ))}
                 </select>
               </label>
             </div>
@@ -7002,6 +7051,8 @@ export function GemIndexApp() {
                 )}
               </section>
 
+              {quickPortfolioActionsPanel}
+
               <section className="section-panel rounded-xl p-3">
                 <h3 className="mb-2 text-sm font-semibold text-slate-200">Create New Portfolio</h3>
                 <div className="grid gap-3 lg:grid-cols-[2fr_auto]">
@@ -7023,8 +7074,6 @@ export function GemIndexApp() {
                   </button>
                 </div>
               </section>
-
-              {quickPortfolioActionsPanel}
             </>
           )}
         </div>
@@ -7319,10 +7368,12 @@ export function GemIndexApp() {
                   autoComplete="new-password"
                   name="accountNewPassword"
                   type="password"
+                  minLength={12}
+                  title={PASSWORD_POLICY_HINT}
                 />
               </div>
               <p className="text-xs text-slate-400">
-                Leave the password fields blank if you only want to update your name or email address.
+                Leave the password fields blank if you only want to update your name or email address. {PASSWORD_POLICY_HINT}
               </p>
               <button
                 className="rounded border border-cyan-300/40 bg-cyan-500/20 px-4 py-2 text-sm font-semibold text-cyan-100 disabled:opacity-60"
@@ -8011,11 +8062,12 @@ export function GemIndexApp() {
           <div className="relative flex flex-col items-center gap-1 text-center">
             <div className="flex flex-col items-center justify-center gap-0">
               <Image
-                src="/investige-logo-v3.png"
+                src={INVESTIGE_LOGO_SRC}
                 alt="Investige logo"
                 width={1260}
                 height={420}
                 priority
+                unoptimized
                 className="h-36 w-auto object-contain drop-shadow-[0_10px_20px_rgba(0,0,0,0.35)] sm:h-40 lg:h-44"
               />
             </div>
