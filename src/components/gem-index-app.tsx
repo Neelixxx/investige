@@ -7990,16 +7990,11 @@ export function GemIndexApp() {
 
   return (
     <main className="mx-auto flex max-w-7xl flex-col gap-4 p-4 sm:p-8">
-      <section className="relative z-40 overflow-visible rounded-3xl border border-white/10 bg-transparent p-3 sm:p-4">
+      <section className="relative z-40 overflow-visible rounded-3xl border border-white/10 bg-transparent px-3 py-2 sm:px-4 sm:py-3">
         <div className="relative z-10">
-        <div className="flex justify-end">
-          <button className="rounded border border-white/25 bg-white/5 px-3 py-1.5 text-sm text-slate-100 hover:bg-white/10" onClick={logout}>
-            Logout
-          </button>
-        </div>
-        <div className="flex flex-col gap-2 pt-1">
-          <div className="flex justify-end">
-            <div className="flex flex-col gap-1 text-center text-sm text-slate-300 sm:items-end sm:text-right">
+        <div className="flex items-start justify-end gap-3">
+          <div className="flex items-start gap-3">
+            <div className="flex flex-col gap-0.5 text-center text-sm text-slate-300 sm:items-end sm:text-right">
               <p>
                 {user.name} ({user.role}) | {sync?.subscription.tier ?? user.subscriptionTier} plan
               </p>
@@ -8007,8 +8002,13 @@ export function GemIndexApp() {
                 Status: {sync?.subscription.status ?? user.subscriptionStatus}
               </p>
             </div>
+            <button className="rounded border border-white/25 bg-white/5 px-3 py-1.5 text-sm text-slate-100 hover:bg-white/10" onClick={logout}>
+              Logout
+            </button>
           </div>
-          <div className="relative flex flex-col items-center gap-2 text-center">
+        </div>
+        <div className="flex flex-col gap-1 pt-1">
+          <div className="relative flex flex-col items-center gap-1 text-center">
             <div className="flex flex-col items-center justify-center gap-0">
               <Image
                 src="/investige-logo-v3.png"
@@ -8016,10 +8016,10 @@ export function GemIndexApp() {
                 width={1260}
                 height={420}
                 priority
-                className="h-28 w-auto object-contain drop-shadow-[0_10px_20px_rgba(0,0,0,0.35)] sm:h-32 lg:h-36"
+                className="h-36 w-auto object-contain drop-shadow-[0_10px_20px_rgba(0,0,0,0.35)] sm:h-40 lg:h-44"
               />
             </div>
-            <div className="relative z-[60] mx-auto mt-0.5 w-full max-w-[18rem] sm:mt-1 sm:max-w-[20rem]">
+            <div className="relative z-[60] mx-auto mt-0 w-full max-w-[18rem] sm:max-w-[20rem]">
               <input
                 id="global-search"
               value={cardSearch}
