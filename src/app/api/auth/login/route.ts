@@ -4,6 +4,7 @@ import { z } from "zod";
 import { issueEmailVerification } from "@/lib/account-recovery";
 import { createSessionToken, publicUser, setSessionCookie, verifyPassword } from "@/lib/auth";
 import { readDb } from "@/lib/db";
+import { emailProviderConfigured } from "@/lib/notifications";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { verifyTotpToken } from "@/lib/totp";
 
@@ -28,12 +29,19 @@ function requireEmailVerification(): boolean {
     return false;
   }
 
-  if (process.env.NODE_ENV === "production") {
+  const override = process.env.AUTH_REQUIRE_EMAIL_VERIFICATION;
+  if (override === "1" || override === "true") {
     return true;
   }
+  if (override === "0" || override === "false") {
+    return false;
+  }
 
-  const override = process.env.AUTH_REQUIRE_EMAIL_VERIFICATION;
-  return override === "1" || override === "true";
+  if (process.env.NODE_ENV !== "production") {
+    return false;
+  }
+
+  return emailProviderConfigured();
 }
 
 export async function POST(request: NextRequest) {

@@ -5,6 +5,7 @@ import { hashPassword, publicUser } from "@/lib/auth";
 import { issueEmailVerification } from "@/lib/account-recovery";
 import { nextId, withDbMutation } from "@/lib/db";
 import { plusDays } from "@/lib/entitlements";
+import { emailProviderConfigured } from "@/lib/notifications";
 import { checkRateLimit } from "@/lib/rate-limit";
 import type { UserRecord } from "@/lib/types";
 
@@ -25,6 +26,29 @@ const registerSchema = z.object({
   message: "Passwords do not match.",
   path: ["passwordConfirm"],
 });
+
+function requireEmailVerification(): boolean {
+  const allowUnverified =
+    process.env.AUTH_ALLOW_UNVERIFIED_LOGIN === "1" ||
+    process.env.AUTH_ALLOW_UNVERIFIED_LOGIN === "true";
+  if (allowUnverified) {
+    return false;
+  }
+
+  const override = process.env.AUTH_REQUIRE_EMAIL_VERIFICATION;
+  if (override === "1" || override === "true") {
+    return true;
+  }
+  if (override === "0" || override === "false") {
+    return false;
+  }
+
+  if (process.env.NODE_ENV !== "production") {
+    return false;
+  }
+
+  return emailProviderConfigured();
+}
 
 export async function POST(request: NextRequest) {
   const json = await request.json();
@@ -54,6 +78,7 @@ export async function POST(request: NextRequest) {
   }
 
   const passwordHash = await hashPassword(payload.password);
+  const verificationRequired = requireEmailVerification();
 
   let createdUser: UserRecord;
 
@@ -84,8 +109,8 @@ export async function POST(request: NextRequest) {
             ? plusDays(new Date(now), 365)
             : plusDays(new Date(now), 14),
         trialEndsAt: role === "ADMIN" ? undefined : plusDays(new Date(now), 14),
-        emailVerified: role === "ADMIN",
-        emailVerifiedAt: role === "ADMIN" ? now : undefined,
+        emailVerified: role === "ADMIN" || !verificationRequired,
+        emailVerifiedAt: role === "ADMIN" || !verificationRequired ? now : undefined,
         createdAt: now,
         updatedAt: now,
       };
