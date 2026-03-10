@@ -508,11 +508,16 @@ const RAW_CARD_CONDITION_MULTIPLIERS: Record<RawCardCondition, number> = {
   DMG: 0.5,
 };
 const PASSWORD_POLICY_HINT =
-  "At least 12 characters with uppercase, lowercase, number, and special character.";
+  "At least 12 characters with uppercase, lowercase, number, and any special character.";
 const DEFAULT_GALLERY_TYPE_API_OPTIONS: PokemonGalleryTypeApi[] = DEFAULT_GALLERY_TYPE_OPTIONS.map((option) => ({
   ...option,
   count: 0,
 }));
+
+type PasswordRequirementStatus = {
+  label: string;
+  met: boolean;
+};
 
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const controller = new AbortController();
@@ -732,6 +737,39 @@ function formatDualAxisValue(value: number, mode: DualAxisValueFormat): string {
     return formatPercent(value);
   }
   return formatChartValue(value, mode === "currency" ? "currency" : "number");
+}
+
+function getPasswordRequirementStatuses(password: string): PasswordRequirementStatus[] {
+  return [
+    { label: "12+ characters", met: password.length >= 12 },
+    { label: "Uppercase letter", met: /[A-Z]/.test(password) },
+    { label: "Lowercase letter", met: /[a-z]/.test(password) },
+    { label: "Number", met: /\d/.test(password) },
+    { label: "Special character", met: /[^A-Za-z0-9]/.test(password) },
+  ];
+}
+
+function PasswordRequirementChecklist({ password }: { password: string }) {
+  const statuses = getPasswordRequirementStatuses(password);
+  const allMet = statuses.every((status) => status.met);
+
+  return (
+    <div className="rounded-xl bg-black/15 p-3">
+      <p className={`text-xs font-semibold ${allMet ? "text-emerald-200" : "text-slate-200"}`}>
+        {allMet ? "All password requirements met" : "Password requirements"}
+      </p>
+      <div className="mt-2 grid gap-1 sm:grid-cols-2">
+        {statuses.map((status) => (
+          <p
+            key={status.label}
+            className={`text-xs ${status.met ? "text-emerald-200" : "text-slate-400"}`}
+          >
+            {status.met ? "OK" : "•"} {status.label}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function ProductThumbnail({
@@ -2564,12 +2602,15 @@ export function GemIndexApp() {
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [loginIdentifier, setLoginIdentifier] = useState("demo");
   const [loginPassword, setLoginPassword] = useState("demo1234");
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [regFirstName, setRegFirstName] = useState("");
   const [regLastName, setRegLastName] = useState("");
   const [regUsername, setRegUsername] = useState("");
   const [regEmail, setRegEmail] = useState("");
   const [regPassword, setRegPassword] = useState("");
   const [regPasswordConfirm, setRegPasswordConfirm] = useState("");
+  const [showRegPassword, setShowRegPassword] = useState(false);
+  const [showRegPasswordConfirm, setShowRegPasswordConfirm] = useState(false);
   const [verificationEmail, setVerificationEmail] = useState("");
   const [showVerificationPanel, setShowVerificationPanel] = useState(false);
   const [showRecoveryPanel, setShowRecoveryPanel] = useState(false);
@@ -2577,6 +2618,7 @@ export function GemIndexApp() {
   const [verifyToken, setVerifyToken] = useState("");
   const [recoveryResetToken, setRecoveryResetToken] = useState("");
   const [recoveryNewPassword, setRecoveryNewPassword] = useState("");
+  const [showRecoveryNewPassword, setShowRecoveryNewPassword] = useState(false);
   const [message, setMessage] = useState("");
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [cards, setCards] = useState<CardApi[]>([]);
@@ -2659,6 +2701,8 @@ export function GemIndexApp() {
   const [accountEmail, setAccountEmail] = useState("");
   const [accountCurrentPassword, setAccountCurrentPassword] = useState("");
   const [accountNewPassword, setAccountNewPassword] = useState("");
+  const [showAccountCurrentPassword, setShowAccountCurrentPassword] = useState(false);
+  const [showAccountNewPassword, setShowAccountNewPassword] = useState(false);
   const [accountBusy, setAccountBusy] = useState(false);
   const [cardAlertCondition, setCardAlertCondition] = useState<AlertRuleApi["condition"]>("PRICE_BELOW");
   const [cardAlertThreshold, setCardAlertThreshold] = useState("");
@@ -3844,6 +3888,9 @@ export function GemIndexApp() {
                     placeholder="Username"
                     required
                   />
+                  <p className="-mt-1 text-xs text-slate-300">
+                    Username may use letters, numbers, dot, underscore, and hyphen.
+                  </p>
                   <input
                     name="email"
                     autoComplete="email"
@@ -3855,31 +3902,58 @@ export function GemIndexApp() {
                     required
                   />
                   <div className="grid gap-2 sm:grid-cols-2">
-                    <input
-                      name="newPassword"
-                      autoComplete="new-password"
-                      className="w-full rounded-lg border border-white/20 bg-slate-900/60 px-3 py-2 text-slate-100 placeholder:text-slate-400 outline-none focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-400/20"
-                      type="password"
-                      minLength={12}
-                      title={PASSWORD_POLICY_HINT}
-                      value={regPassword}
-                      onChange={(e) => setRegPassword(e.target.value)}
-                      placeholder="Create password"
-                      required
-                    />
-                    <input
-                      name="confirmPassword"
-                      autoComplete="new-password"
-                      className="w-full rounded-lg border border-white/20 bg-slate-900/60 px-3 py-2 text-slate-100 placeholder:text-slate-400 outline-none focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-400/20"
-                      type="password"
-                      minLength={12}
-                      title={PASSWORD_POLICY_HINT}
-                      value={regPasswordConfirm}
-                      onChange={(e) => setRegPasswordConfirm(e.target.value)}
-                      placeholder="Confirm password"
-                      required
-                    />
+                    <div className="relative">
+                      <input
+                        name="newPassword"
+                        autoComplete="new-password"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        inputMode="text"
+                        className="w-full rounded-lg border border-white/20 bg-slate-900/60 px-3 py-2 pr-16 text-slate-100 placeholder:text-slate-400 outline-none focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-400/20"
+                        type={showRegPassword ? "text" : "password"}
+                        minLength={12}
+                        title={PASSWORD_POLICY_HINT}
+                        value={regPassword}
+                        onChange={(e) => setRegPassword(e.target.value)}
+                        placeholder="Create password"
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-semibold text-cyan-200 hover:text-cyan-100"
+                        onClick={() => setShowRegPassword((current) => !current)}
+                      >
+                        {showRegPassword ? "Hide" : "Show"}
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <input
+                        name="confirmPassword"
+                        autoComplete="new-password"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        inputMode="text"
+                        className="w-full rounded-lg border border-white/20 bg-slate-900/60 px-3 py-2 pr-16 text-slate-100 placeholder:text-slate-400 outline-none focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-400/20"
+                        type={showRegPasswordConfirm ? "text" : "password"}
+                        minLength={12}
+                        title={PASSWORD_POLICY_HINT}
+                        value={regPasswordConfirm}
+                        onChange={(e) => setRegPasswordConfirm(e.target.value)}
+                        placeholder="Confirm password"
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-semibold text-cyan-200 hover:text-cyan-100"
+                        onClick={() => setShowRegPasswordConfirm((current) => !current)}
+                      >
+                        {showRegPasswordConfirm ? "Hide" : "Show"}
+                      </button>
+                    </div>
                   </div>
+                  <PasswordRequirementChecklist password={regPassword} />
                   <p className="text-xs text-slate-300">{PASSWORD_POLICY_HINT}</p>
                 </>
               ) : (
@@ -3894,16 +3968,25 @@ export function GemIndexApp() {
                     placeholder="Username or email"
                     required
                   />
-                  <input
-                    name="loginPassword"
-                    autoComplete="current-password"
-                    className="w-full rounded-lg border border-white/20 bg-slate-900/60 px-3 py-2 text-slate-100 placeholder:text-slate-400 outline-none focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-400/20"
-                    type="password"
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    placeholder="Password"
-                    required
-                  />
+                  <div className="relative">
+                    <input
+                      name="loginPassword"
+                      autoComplete="current-password"
+                      className="w-full rounded-lg border border-white/20 bg-slate-900/60 px-3 py-2 pr-16 text-slate-100 placeholder:text-slate-400 outline-none focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-400/20"
+                      type={showLoginPassword ? "text" : "password"}
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      placeholder="Password"
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-semibold text-cyan-200 hover:text-cyan-100"
+                      onClick={() => setShowLoginPassword((current) => !current)}
+                    >
+                      {showLoginPassword ? "Hide" : "Show"}
+                    </button>
+                  </div>
                 </>
               )}
 
@@ -3956,17 +4039,27 @@ export function GemIndexApp() {
                   onChange={(e) => setRecoveryResetToken(e.target.value)}
                   placeholder="Password reset token"
                 />
-                <input
-                  name="recoveryNewPassword"
-                  autoComplete="new-password"
-                  className="w-full rounded-lg border border-white/20 bg-slate-900/60 px-3 py-2 text-slate-100 placeholder:text-slate-400 outline-none focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-400/20"
-                  type="password"
-                  minLength={12}
-                  title={PASSWORD_POLICY_HINT}
-                  value={recoveryNewPassword}
-                  onChange={(e) => setRecoveryNewPassword(e.target.value)}
-                  placeholder="New password"
-                />
+                <div className="relative">
+                  <input
+                    name="recoveryNewPassword"
+                    autoComplete="new-password"
+                    className="w-full rounded-lg border border-white/20 bg-slate-900/60 px-3 py-2 pr-16 text-slate-100 placeholder:text-slate-400 outline-none focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-400/20"
+                    type={showRecoveryNewPassword ? "text" : "password"}
+                    minLength={12}
+                    title={PASSWORD_POLICY_HINT}
+                    value={recoveryNewPassword}
+                    onChange={(e) => setRecoveryNewPassword(e.target.value)}
+                    placeholder="New password"
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-semibold text-cyan-200 hover:text-cyan-100"
+                    onClick={() => setShowRecoveryNewPassword((current) => !current)}
+                  >
+                    {showRecoveryNewPassword ? "Hide" : "Show"}
+                  </button>
+                </div>
+                <PasswordRequirementChecklist password={recoveryNewPassword} />
                 <p className="-mt-1 text-xs text-slate-300">{PASSWORD_POLICY_HINT}</p>
                 <button
                   className="rounded-lg border border-cyan-300/40 bg-cyan-500/20 px-3 py-2 text-cyan-100 hover:bg-cyan-500/30"
@@ -7351,27 +7444,46 @@ export function GemIndexApp() {
                 type="email"
               />
               <div className="grid gap-3 md:grid-cols-2">
-                <input
-                  className="rounded border border-white/20 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-400"
-                  value={accountCurrentPassword}
-                  onChange={(event) => setAccountCurrentPassword(event.target.value)}
-                  placeholder="Current Password"
-                  autoComplete="current-password"
-                  name="accountCurrentPassword"
-                  type="password"
-                />
-                <input
-                  className="rounded border border-white/20 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 placeholder:text-slate-400"
-                  value={accountNewPassword}
-                  onChange={(event) => setAccountNewPassword(event.target.value)}
-                  placeholder="New Password"
-                  autoComplete="new-password"
-                  name="accountNewPassword"
-                  type="password"
-                  minLength={12}
-                  title={PASSWORD_POLICY_HINT}
-                />
+                <div className="relative">
+                  <input
+                    className="w-full rounded border border-white/20 bg-slate-900/60 px-3 py-2 pr-16 text-sm text-slate-100 placeholder:text-slate-400"
+                    value={accountCurrentPassword}
+                    onChange={(event) => setAccountCurrentPassword(event.target.value)}
+                    placeholder="Current Password"
+                    autoComplete="current-password"
+                    name="accountCurrentPassword"
+                    type={showAccountCurrentPassword ? "text" : "password"}
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-semibold text-cyan-200 hover:text-cyan-100"
+                    onClick={() => setShowAccountCurrentPassword((current) => !current)}
+                  >
+                    {showAccountCurrentPassword ? "Hide" : "Show"}
+                  </button>
+                </div>
+                <div className="relative">
+                  <input
+                    className="w-full rounded border border-white/20 bg-slate-900/60 px-3 py-2 pr-16 text-sm text-slate-100 placeholder:text-slate-400"
+                    value={accountNewPassword}
+                    onChange={(event) => setAccountNewPassword(event.target.value)}
+                    placeholder="New Password"
+                    autoComplete="new-password"
+                    name="accountNewPassword"
+                    type={showAccountNewPassword ? "text" : "password"}
+                    minLength={12}
+                    title={PASSWORD_POLICY_HINT}
+                  />
+                  <button
+                    type="button"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-semibold text-cyan-200 hover:text-cyan-100"
+                    onClick={() => setShowAccountNewPassword((current) => !current)}
+                  >
+                    {showAccountNewPassword ? "Hide" : "Show"}
+                  </button>
+                </div>
               </div>
+              {accountNewPassword ? <PasswordRequirementChecklist password={accountNewPassword} /> : null}
               <p className="text-xs text-slate-400">
                 Leave the password fields blank if you only want to update your name or email address. {PASSWORD_POLICY_HINT}
               </p>
@@ -8041,26 +8153,10 @@ export function GemIndexApp() {
 
   return (
     <main className="mx-auto flex max-w-7xl flex-col gap-4 p-4 sm:p-8">
-      <section className="relative z-40 overflow-visible rounded-3xl border border-white/10 bg-transparent px-3 py-1.5 sm:px-4 sm:py-2">
+      <section className="relative z-40 overflow-visible rounded-3xl border border-white/10 bg-transparent px-3 py-1 sm:px-4 sm:py-1.5">
         <div className="relative z-10">
-        <div className="flex items-start justify-end gap-3">
-          <div className="flex items-start gap-3">
-            <div className="flex flex-col gap-0.5 text-center text-sm text-slate-300 sm:items-end sm:text-right">
-              <p>
-                {user.name} ({user.role}) | {sync?.subscription.tier ?? user.subscriptionTier} plan
-              </p>
-              <p className="text-xs" data-testid="plan-badge">
-                Status: {sync?.subscription.status ?? user.subscriptionStatus}
-              </p>
-            </div>
-            <button className="rounded border border-white/25 bg-white/5 px-3 py-1.5 text-sm text-slate-100 hover:bg-white/10" onClick={logout}>
-              Logout
-            </button>
-          </div>
-        </div>
-        <div className="flex flex-col gap-0.5 pt-0.5">
-          <div className="relative flex flex-col items-center gap-0.5 text-center">
-            <div className="flex flex-col items-center justify-center gap-0">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center">
               <Image
                 src={INVESTIGE_LOGO_SRC}
                 alt="Investige logo"
@@ -8068,151 +8164,170 @@ export function GemIndexApp() {
                 height={420}
                 priority
                 unoptimized
-                className="h-20 w-auto object-contain drop-shadow-[0_10px_20px_rgba(0,0,0,0.35)] sm:h-24 lg:h-28"
+                className="h-28 w-auto object-contain drop-shadow-[0_10px_20px_rgba(0,0,0,0.35)] sm:h-32 lg:h-36"
               />
             </div>
-            <div className="relative z-[60] mx-auto mt-0 w-full max-w-[16rem] sm:max-w-[18rem]">
+            <div className="flex shrink-0 items-center gap-3">
+              <div className="flex flex-col gap-0.5 text-right text-sm text-slate-300">
+                <p>
+                  {user.name} ({user.role}) | {sync?.subscription.tier ?? user.subscriptionTier} plan
+                </p>
+                <p className="text-xs" data-testid="plan-badge">
+                  Status: {sync?.subscription.status ?? user.subscriptionStatus}
+                </p>
+              </div>
+              <button
+                className="rounded border border-white/25 bg-white/5 px-3 py-1.5 text-sm text-slate-100 hover:bg-white/10"
+                onClick={logout}
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+          <div className="relative z-[60] mt-0.5 flex justify-center">
+            <div className="relative w-full max-w-[16rem] sm:max-w-[18rem]">
               <input
                 id="global-search"
-              value={cardSearch}
-              onChange={(event) => applyGlobalSearch(event.target.value)}
-              onFocus={() => {
-                if (normalizeSearchText(cardSearch)) {
-                  setSearchDropdownOpen(true);
-                }
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Escape") {
-                  setSearchDropdownOpen(false);
-                  setSearchDropdownIndex(0);
-                  return;
-                }
-
-                if (!searchDropdownOptions.length) {
-                  return;
-                }
-
-                if (event.key === "ArrowDown") {
-                  event.preventDefault();
-                  setSearchDropdownOpen(true);
-                  setSearchDropdownIndex((current) =>
-                    showSearchDropdown ? (current + 1) % searchDropdownOptions.length : 0,
-                  );
-                  return;
-                }
-
-                if (event.key === "ArrowUp") {
-                  event.preventDefault();
-                  setSearchDropdownOpen(true);
-                  setSearchDropdownIndex(
-                    (current) =>
-                      showSearchDropdown
-                        ? (current - 1 + searchDropdownOptions.length) % searchDropdownOptions.length
-                        : searchDropdownOptions.length - 1,
-                  );
-                  return;
-                }
-
-                if (event.key === "Enter" && showSearchDropdown) {
-                  event.preventDefault();
-                  const selected = searchDropdownOptions[effectiveSearchDropdownIndex];
-                  if (!selected) {
+                value={cardSearch}
+                onChange={(event) => applyGlobalSearch(event.target.value)}
+                onFocus={() => {
+                  if (normalizeSearchText(cardSearch)) {
+                    setSearchDropdownOpen(true);
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    setSearchDropdownOpen(false);
+                    setSearchDropdownIndex(0);
                     return;
                   }
-                  if (selected.kind === "CARD") {
-                    selectSearchCard(selected.card);
+
+                  if (!searchDropdownOptions.length) {
                     return;
                   }
-                  selectSearchSealed(selected.item);
-                }
-              }}
-              placeholder="Search for raw, graded, or sealed product.."
-              className="w-full rounded-xl border border-white/20 bg-slate-900/60 px-4 py-2 text-sm text-slate-100 shadow-black/20 outline-none placeholder:text-slate-400 focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-400/20"
-            />
-            {showSearchDropdown ? (
-              <div className="absolute left-0 right-0 top-full z-[80] mt-2 rounded-2xl border border-black/70 bg-[#020617] p-3 shadow-2xl shadow-black/80 ring-1 ring-slate-800/80">
-                <div className="grid gap-3 md:grid-cols-2">
-                  <section className="space-y-2 rounded-xl bg-[#030712] p-2">
-                    <div className="flex items-center justify-between">
-                      <p className="text-[11px] font-semibold capitalize tracking-[0.18em] text-cyan-200">Cards</p>
-                      <span className="text-[11px] text-slate-400">{dropdownCardMatches.length}</span>
-                    </div>
-                    <div className="space-y-1">
-                      {dropdownCardMatches.length ? (
-                        dropdownCardMatches.map((card, index) => (
-                          <button
-                            key={card.cardId}
-                            type="button"
-                            onClick={() => selectSearchCard(card)}
-                            onMouseEnter={() => setSearchDropdownIndex(index)}
-                            className={`grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl px-2 py-2 text-left text-sm text-slate-100 hover:bg-black/30 ${
-                              effectiveSearchDropdownIndex === index ? "bg-cyan-500/10" : "bg-black/10"
-                            }`}
-                          >
-                            <ProductThumbnail
-                              imageUrl={card.imageUrl}
-                              alt={`${card.cardName} ${card.cardNumber}`}
-                              fallback={card.cardName}
-                              className="h-14 w-10 shrink-0"
-                            />
-                            <span>
-                              <span className="block font-medium">
-                                {card.cardName} {card.cardNumber}
+
+                  if (event.key === "ArrowDown") {
+                    event.preventDefault();
+                    setSearchDropdownOpen(true);
+                    setSearchDropdownIndex((current) =>
+                      showSearchDropdown ? (current + 1) % searchDropdownOptions.length : 0,
+                    );
+                    return;
+                  }
+
+                  if (event.key === "ArrowUp") {
+                    event.preventDefault();
+                    setSearchDropdownOpen(true);
+                    setSearchDropdownIndex(
+                      (current) =>
+                        showSearchDropdown
+                          ? (current - 1 + searchDropdownOptions.length) % searchDropdownOptions.length
+                          : searchDropdownOptions.length - 1,
+                    );
+                    return;
+                  }
+
+                  if (event.key === "Enter" && showSearchDropdown) {
+                    event.preventDefault();
+                    const selected = searchDropdownOptions[effectiveSearchDropdownIndex];
+                    if (!selected) {
+                      return;
+                    }
+                    if (selected.kind === "CARD") {
+                      selectSearchCard(selected.card);
+                      return;
+                    }
+                    selectSearchSealed(selected.item);
+                  }
+                }}
+                placeholder="Search for raw, graded, or sealed product.."
+                className="w-full rounded-xl border border-white/20 bg-slate-900/60 px-4 py-2 text-sm text-slate-100 shadow-black/20 outline-none placeholder:text-slate-400 focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-400/20"
+              />
+              {showSearchDropdown ? (
+                <div className="absolute left-0 right-0 top-full z-[80] mt-2 rounded-2xl border border-black/70 bg-[#020617] p-3 shadow-2xl shadow-black/80 ring-1 ring-slate-800/80">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <section className="space-y-2 rounded-xl bg-[#030712] p-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[11px] font-semibold capitalize tracking-[0.18em] text-cyan-200">Cards</p>
+                        <span className="text-[11px] text-slate-400">{dropdownCardMatches.length}</span>
+                      </div>
+                      <div className="space-y-1">
+                        {dropdownCardMatches.length ? (
+                          dropdownCardMatches.map((card, index) => (
+                            <button
+                              key={card.cardId}
+                              type="button"
+                              onClick={() => selectSearchCard(card)}
+                              onMouseEnter={() => setSearchDropdownIndex(index)}
+                              className={`grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl px-2 py-2 text-left text-sm text-slate-100 hover:bg-black/30 ${
+                                effectiveSearchDropdownIndex === index ? "bg-cyan-500/10" : "bg-black/10"
+                              }`}
+                            >
+                              <ProductThumbnail
+                                imageUrl={card.imageUrl}
+                                alt={`${card.cardName} ${card.cardNumber}`}
+                                fallback={card.cardName}
+                                className="h-14 w-10 shrink-0"
+                              />
+                              <span>
+                                <span className="block font-medium">
+                                  {card.cardName} {card.cardNumber}
+                                </span>
+                                <span className="block text-xs text-slate-400">{setCodeLabel(card.setCode)}</span>
                               </span>
-                              <span className="block text-xs text-slate-400">{setCodeLabel(card.setCode)}</span>
-                            </span>
-                            <span className="text-xs text-slate-300">{investmentMetricsReady ? usd(card.rawPrice) : "Pending"}</span>
-                          </button>
-                        ))
-                      ) : (
-                        <p className="rounded-xl bg-black/20 px-3 py-2 text-xs text-slate-400">No card matches found.</p>
-                      )}
-                    </div>
-                  </section>
-                  <section className="space-y-2 rounded-xl bg-[#030712] p-2">
-                    <div className="flex items-center justify-between">
-                      <p className="text-[11px] font-semibold capitalize tracking-[0.18em] text-fuchsia-200">Sealed Products</p>
-                      <span className="text-[11px] text-slate-400">{dropdownSealedMatches.length}</span>
-                    </div>
-                    <div className="space-y-1">
-                      {dropdownSealedMatches.length ? (
-                        dropdownSealedMatches.map((item, index) => (
-                          <button
-                            key={item.id}
-                            type="button"
-                            onClick={() => selectSearchSealed(item)}
-                            onMouseEnter={() => setSearchDropdownIndex(dropdownCardMatches.length + index)}
-                            className={`grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl px-2 py-2 text-left text-sm text-slate-100 hover:bg-black/30 ${
-                              effectiveSearchDropdownIndex === dropdownCardMatches.length + index ? "bg-fuchsia-500/10" : "bg-black/10"
-                            }`}
-                          >
-                            <ProductThumbnail
-                              imageUrl={item.imageUrl}
-                              alt={item.productName}
-                              fallback={item.productName}
-                              className="h-14 w-10 shrink-0"
-                            />
-                            <span>
-                              <span className="block font-medium">{item.productName}</span>
-                              <span className="block text-xs text-slate-400">
-                                {item.setName ?? setCodeLabel(item.setCode)} | {item.meta}
+                              <span className="text-xs text-slate-300">
+                                {investmentMetricsReady ? usd(card.rawPrice) : "Pending"}
                               </span>
-                            </span>
-                            <span className="text-xs text-slate-300">{item.valueLabel}</span>
-                          </button>
-                        ))
-                      ) : (
-                        <p className="rounded-xl bg-black/20 px-3 py-2 text-xs text-slate-400">No sealed matches found.</p>
-                      )}
-                    </div>
-                  </section>
+                            </button>
+                          ))
+                        ) : (
+                          <p className="rounded-xl bg-black/20 px-3 py-2 text-xs text-slate-400">No card matches found.</p>
+                        )}
+                      </div>
+                    </section>
+                    <section className="space-y-2 rounded-xl bg-[#030712] p-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[11px] font-semibold capitalize tracking-[0.18em] text-fuchsia-200">Sealed Products</p>
+                        <span className="text-[11px] text-slate-400">{dropdownSealedMatches.length}</span>
+                      </div>
+                      <div className="space-y-1">
+                        {dropdownSealedMatches.length ? (
+                          dropdownSealedMatches.map((item, index) => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              onClick={() => selectSearchSealed(item)}
+                              onMouseEnter={() => setSearchDropdownIndex(dropdownCardMatches.length + index)}
+                              className={`grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl px-2 py-2 text-left text-sm text-slate-100 hover:bg-black/30 ${
+                                effectiveSearchDropdownIndex === dropdownCardMatches.length + index ? "bg-fuchsia-500/10" : "bg-black/10"
+                              }`}
+                            >
+                              <ProductThumbnail
+                                imageUrl={item.imageUrl}
+                                alt={item.productName}
+                                fallback={item.productName}
+                                className="h-14 w-10 shrink-0"
+                              />
+                              <span>
+                                <span className="block font-medium">{item.productName}</span>
+                                <span className="block text-xs text-slate-400">
+                                  {item.setName ?? setCodeLabel(item.setCode)} | {item.meta}
+                                </span>
+                              </span>
+                              <span className="text-xs text-slate-300">{item.valueLabel}</span>
+                            </button>
+                          ))
+                        ) : (
+                          <p className="rounded-xl bg-black/20 px-3 py-2 text-xs text-slate-400">No sealed matches found.</p>
+                        )}
+                      </div>
+                    </section>
+                  </div>
                 </div>
-              </div>
-            ) : null}
+              ) : null}
+            </div>
           </div>
           {message ? <p className="text-sm text-slate-200">{message}</p> : null}
-        </div>
-        </div>
         </div>
       </section>
 
