@@ -3727,20 +3727,20 @@ export function GemIndexApp() {
   if (!user) {
     return (
       <main className="mx-auto max-w-3xl p-4 sm:p-8">
-        <section className="rounded-3xl bg-[radial-gradient(circle_at_18%_20%,rgba(214,96,198,0.14),transparent_24%),radial-gradient(circle_at_82%_18%,rgba(52,178,255,0.16),transparent_28%),linear-gradient(150deg,#182f61_0%,#0f2551_45%,#0b1f45_100%)] p-5 text-white shadow-xl shadow-black/30">
-          <div className="flex flex-col items-center gap-3 text-center">
+        <section className="rounded-3xl bg-[radial-gradient(circle_at_18%_20%,rgba(214,96,198,0.14),transparent_24%),radial-gradient(circle_at_82%_18%,rgba(52,178,255,0.16),transparent_28%),linear-gradient(150deg,#182f61_0%,#0f2551_45%,#0b1f45_100%)] px-4 py-3 text-white shadow-xl shadow-black/30 sm:px-5 sm:py-4">
+          <div className="flex flex-col items-center gap-2 text-center">
             <Image
               src="/investige-logo-v3.png"
               alt="Investige logo"
               width={1260}
               height={420}
               priority
-              className="h-20 w-auto object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.35)] sm:h-24"
+              className="h-28 w-auto object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.35)] sm:h-32"
             />
             <p className="text-sm text-cyan-100">Register or Sign In</p>
           </div>
 
-          <div className="mt-5 rounded-2xl bg-slate-950/20 p-4 text-slate-100 backdrop-blur-md sm:p-5">
+          <div className="mt-4 rounded-2xl bg-slate-950/20 p-4 text-slate-100 backdrop-blur-md sm:p-5">
             <form key={authMode} className="space-y-3" onSubmit={submitAuth}>
               <div className="flex gap-2 rounded-lg bg-black/15 p-1 text-sm">
                 <button
