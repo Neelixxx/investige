@@ -419,7 +419,7 @@ const PRIMARY_HOME_TABS: Array<{ id: HomeTab; label: string }> = [
   { id: "SETTINGS", label: "Settings" },
 ];
 
-const INVESTIGE_LOGO_SRC = "/investige-logo.png?v=20260310-1";
+const INVESTIGE_LOGO_SRC = "/investige-logo-v20260310a.png";
 const HEADER_BACKGROUND_STORAGE_KEY = "gemindex.headerBackgroundId.v4";
 
 const HEADER_BACKGROUND_OPTIONS: Array<{
@@ -3778,8 +3778,8 @@ export function GemIndexApp() {
   if (!user) {
     return (
       <main className="mx-auto max-w-3xl p-4 sm:p-8">
-        <section className="rounded-3xl bg-[radial-gradient(circle_at_18%_20%,rgba(214,96,198,0.14),transparent_24%),radial-gradient(circle_at_82%_18%,rgba(52,178,255,0.16),transparent_28%),linear-gradient(150deg,#182f61_0%,#0f2551_45%,#0b1f45_100%)] px-4 py-3 text-white shadow-xl shadow-black/30 sm:px-5 sm:py-4">
-          <div className="flex flex-col items-center gap-2 text-center">
+        <section className="rounded-3xl bg-[radial-gradient(circle_at_18%_20%,rgba(214,96,198,0.14),transparent_24%),radial-gradient(circle_at_82%_18%,rgba(52,178,255,0.16),transparent_28%),linear-gradient(150deg,#182f61_0%,#0f2551_45%,#0b1f45_100%)] px-4 py-2 text-white shadow-xl shadow-black/30 sm:px-5 sm:py-3">
+          <div className="flex flex-col items-center gap-1.5 text-center">
             <Image
               src={INVESTIGE_LOGO_SRC}
               alt="Investige logo"
@@ -3787,12 +3787,12 @@ export function GemIndexApp() {
               height={420}
               priority
               unoptimized
-              className="h-28 w-auto object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.35)] sm:h-32"
+              className="h-20 w-auto object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.35)] sm:h-24"
             />
             <p className="text-sm text-cyan-100">Register or Sign In</p>
           </div>
 
-          <div className="mt-4 rounded-2xl bg-slate-950/20 p-4 text-slate-100 backdrop-blur-md sm:p-5">
+          <div className="mt-3 rounded-2xl bg-slate-950/20 p-4 text-slate-100 backdrop-blur-md sm:p-5">
             <form key={authMode} className="space-y-3" onSubmit={submitAuth}>
               <div className="flex gap-2 rounded-lg bg-black/15 p-1 text-sm">
                 <button
@@ -8041,7 +8041,7 @@ export function GemIndexApp() {
 
   return (
     <main className="mx-auto flex max-w-7xl flex-col gap-4 p-4 sm:p-8">
-      <section className="relative z-40 overflow-visible rounded-3xl border border-white/10 bg-transparent px-3 py-2 sm:px-4 sm:py-3">
+      <section className="relative z-40 overflow-visible rounded-3xl border border-white/10 bg-transparent px-3 py-1.5 sm:px-4 sm:py-2">
         <div className="relative z-10">
         <div className="flex items-start justify-end gap-3">
           <div className="flex items-start gap-3">
@@ -8058,8 +8058,8 @@ export function GemIndexApp() {
             </button>
           </div>
         </div>
-        <div className="flex flex-col gap-1 pt-1">
-          <div className="relative flex flex-col items-center gap-1 text-center">
+        <div className="flex flex-col gap-0.5 pt-0.5">
+          <div className="relative flex flex-col items-center gap-0.5 text-center">
             <div className="flex flex-col items-center justify-center gap-0">
               <Image
                 src={INVESTIGE_LOGO_SRC}
@@ -8068,10 +8068,10 @@ export function GemIndexApp() {
                 height={420}
                 priority
                 unoptimized
-                className="h-36 w-auto object-contain drop-shadow-[0_10px_20px_rgba(0,0,0,0.35)] sm:h-40 lg:h-44"
+                className="h-20 w-auto object-contain drop-shadow-[0_10px_20px_rgba(0,0,0,0.35)] sm:h-24 lg:h-28"
               />
             </div>
-            <div className="relative z-[60] mx-auto mt-0 w-full max-w-[18rem] sm:max-w-[20rem]">
+            <div className="relative z-[60] mx-auto mt-0 w-full max-w-[16rem] sm:max-w-[18rem]">
               <input
                 id="global-search"
               value={cardSearch}
@@ -8127,7 +8127,7 @@ export function GemIndexApp() {
                 }
               }}
               placeholder="Search for raw, graded, or sealed product.."
-              className="w-full rounded-xl border border-white/20 bg-slate-900/60 px-4 py-2.5 text-sm text-slate-100 shadow-black/20 outline-none placeholder:text-slate-400 focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-400/20"
+              className="w-full rounded-xl border border-white/20 bg-slate-900/60 px-4 py-2 text-sm text-slate-100 shadow-black/20 outline-none placeholder:text-slate-400 focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-400/20"
             />
             {showSearchDropdown ? (
               <div className="absolute left-0 right-0 top-full z-[80] mt-2 rounded-2xl border border-black/70 bg-[#020617] p-3 shadow-2xl shadow-black/80 ring-1 ring-slate-800/80">
