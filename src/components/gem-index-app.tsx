@@ -8164,7 +8164,7 @@ export function GemIndexApp() {
                 height={420}
                 priority
                 unoptimized
-                className="h-28 w-auto object-contain drop-shadow-[0_10px_20px_rgba(0,0,0,0.35)] sm:h-32 lg:h-36"
+                className="h-44 w-auto object-contain drop-shadow-[0_10px_20px_rgba(0,0,0,0.35)] sm:h-52 lg:h-60"
               />
             </div>
             <div className="flex shrink-0 items-center gap-3">
