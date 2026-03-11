@@ -187,6 +187,8 @@ type CollectionItem = {
   grader?: "PSA" | "TAG";
   grade?: number;
   certificationNumber?: string;
+  acquisitionPriceUsd?: number;
+  notes?: string;
   card: { name: string; cardNumber: string; setCode: string; setName?: string; imageUrl?: string; imageLargeUrl?: string } | null;
 };
 
@@ -419,7 +421,7 @@ const PRIMARY_HOME_TABS: Array<{ id: HomeTab; label: string }> = [
   { id: "SETTINGS", label: "Settings" },
 ];
 
-const INVESTIGE_LOGO_SRC = "/investige-logo-v20260310a.png";
+const INVESTIGE_LOGO_SRC = "/investige-logo-cropped-v20260311a.png";
 const HEADER_BACKGROUND_STORAGE_KEY = "gemindex.headerBackgroundId.v4";
 
 const HEADER_BACKGROUND_OPTIONS: Array<{
@@ -796,6 +798,8 @@ function ProductThumbnail({
       className={`overflow-hidden rounded-lg border border-white/10 bg-[radial-gradient(circle_at_30%_20%,rgba(56,189,248,0.24),transparent_30%),radial-gradient(circle_at_70%_10%,rgba(217,70,239,0.18),transparent_28%),linear-gradient(160deg,rgba(8,47,73,0.9),rgba(15,23,42,0.95))] ${className}`}
     >
       {imageUrl ? (
+        // Remote art comes from multiple providers, so this stays as a plain img.
+        // eslint-disable-next-line @next/next/no-img-element
         <img src={imageUrl} alt={alt} className="h-full w-full object-cover" loading="lazy" />
       ) : (
         <div className="flex h-full w-full items-center justify-center px-1 text-center text-xs font-semibold text-slate-100">
@@ -1028,43 +1032,21 @@ function AnalyticsDataTable<T>({
     () => columns.filter((column) => column.filterable !== false),
     [columns],
   );
-
-  useEffect(() => {
-    if (!sortableColumns.length) {
-      if (sortKey) {
-        setSortKey("");
-      }
-      return;
-    }
-
-    if (!sortableColumns.some((column) => column.key === sortKey)) {
-      setSortKey(sortableColumns[0].key);
-      setSortDirection("asc");
-    }
-  }, [sortKey, sortableColumns]);
-
-  useEffect(() => {
-    if (!filterableColumns.length) {
-      if (singleFilterKey) {
-        setSingleFilterKey("");
-      }
-      return;
-    }
-
-    if (!filterableColumns.some((column) => column.key === singleFilterKey)) {
-      setSingleFilterKey(filterableColumns[0].key);
-    }
-  }, [filterableColumns, singleFilterKey]);
+  const activeSortKey =
+    sortableColumns.find((column) => column.key === sortKey)?.key ?? sortableColumns[0]?.key ?? "";
+  const activeSortDirection = activeSortKey === sortKey ? sortDirection : "asc";
+  const activeSingleFilterKey =
+    filterableColumns.find((column) => column.key === singleFilterKey)?.key ?? filterableColumns[0]?.key ?? "";
 
   const processedRows = useMemo(() => {
     const activeFilters =
       controlMode === "singleFilterHeaderSort"
-        ? singleFilterKey && (filters[singleFilterKey] ?? "").trim()
-          ? [[singleFilterKey, filters[singleFilterKey] ?? ""]]
+        ? activeSingleFilterKey && (filters[activeSingleFilterKey] ?? "").trim()
+          ? [[activeSingleFilterKey, filters[activeSingleFilterKey] ?? ""]]
           : []
         : Object.entries(filters).filter(([, value]) => value.trim());
     const sortColumn =
-      sortableColumns.find((column) => column.key === sortKey) ??
+      sortableColumns.find((column) => column.key === activeSortKey) ??
       sortableColumns[0];
     const filtered = rows.filter((row) =>
       activeFilters.every(([key, filterValue]) => {
@@ -1095,9 +1077,9 @@ function AnalyticsDataTable<T>({
         });
       }
 
-      return sortDirection === "asc" ? comparison : -comparison;
+      return activeSortDirection === "asc" ? comparison : -comparison;
     });
-  }, [columns, controlMode, filters, rows, singleFilterKey, sortDirection, sortKey, sortableColumns]);
+  }, [activeSingleFilterKey, activeSortDirection, activeSortKey, columns, controlMode, filters, rows, sortableColumns]);
 
   return (
     <div className="space-y-2">
@@ -1106,7 +1088,7 @@ function AnalyticsDataTable<T>({
           <label className="flex flex-col gap-1 sm:min-w-52">
             <span className="text-[10px] tracking-wide text-slate-400">Sort By</span>
             <select
-              value={sortKey}
+              value={activeSortKey}
               onChange={(event) => {
                 setSortKey(event.target.value);
                 setSortDirection("asc");
@@ -1126,22 +1108,22 @@ function AnalyticsDataTable<T>({
         <div className="flex flex-col gap-2 rounded-xl bg-white/[0.025] px-3 py-2 text-xs text-slate-300">
           <span className="text-[10px] tracking-wide text-slate-400">Filter</span>
           <input
-            value={singleFilterKey ? filters[singleFilterKey] ?? "" : ""}
+            value={activeSingleFilterKey ? filters[activeSingleFilterKey] ?? "" : ""}
             onChange={(event) =>
               setFilters((current) => ({
                 ...current,
-                [singleFilterKey]: event.target.value,
+                [activeSingleFilterKey]: event.target.value,
               }))
             }
             placeholder={
-              singleFilterKey
-                ? `Search ${filterableColumns.find((column) => column.key === singleFilterKey)?.label ?? "Item"}`
+              activeSingleFilterKey
+                ? `Search ${filterableColumns.find((column) => column.key === activeSingleFilterKey)?.label ?? "Item"}`
                 : "Search"
             }
             className="w-full rounded-lg border border-white/10 bg-slate-950/40 px-2 py-1.5 text-xs text-slate-100 outline-none placeholder:text-slate-500 focus:border-cyan-300/40"
           />
           <select
-            value={singleFilterKey}
+            value={activeSingleFilterKey}
             onChange={(event) => setSingleFilterKey(event.target.value)}
             className="w-full rounded-lg border border-white/10 bg-slate-950/40 px-2 py-1.5 text-xs text-slate-100 outline-none focus:border-cyan-300/40"
           >
@@ -1165,7 +1147,7 @@ function AnalyticsDataTable<T>({
               key={column.key}
               type="button"
               onClick={() => {
-                if (sortKey === column.key) {
+                if (activeSortKey === column.key && sortKey === activeSortKey) {
                   setSortDirection((current) => (current === "asc" ? "desc" : "asc"));
                   return;
                 }
@@ -1179,7 +1161,7 @@ function AnalyticsDataTable<T>({
                 <span className="block text-[9px] tracking-wide text-slate-500">Sort By</span>
               ) : null}
               {column.label}
-              {sortKey === column.key ? (sortDirection === "asc" ? " ^" : " v") : ""}
+              {activeSortKey === column.key ? (activeSortDirection === "asc" ? " ^" : " v") : ""}
             </button>
           ))(resolveColumnAlign(column))
         ))}
@@ -1260,6 +1242,111 @@ function AnalyticsDataTable<T>({
         ) : (
           <p className="p-3 text-sm text-slate-300">{emptyMessage}</p>
         )}
+      </div>
+    </div>
+  );
+}
+
+function CollectionItemEditor({
+  item,
+  onSave,
+  onRemove,
+}: {
+  item: Pick<CollectionItem, "quantity" | "acquisitionPriceUsd" | "notes">;
+  onSave: (changes: { quantity: number; acquisitionPriceUsd?: number; notes?: string }) => Promise<void>;
+  onRemove: () => Promise<void>;
+}) {
+  const [quantity, setQuantity] = useState(String(item.quantity));
+  const [acquisitionPrice, setAcquisitionPrice] = useState(
+    item.acquisitionPriceUsd?.toString() ?? "",
+  );
+  const [notes, setNotes] = useState(item.notes ?? "");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setQuantity(String(item.quantity));
+    setAcquisitionPrice(item.acquisitionPriceUsd?.toString() ?? "");
+    setNotes(item.notes ?? "");
+  }, [item]);
+
+  async function save() {
+    const parsedQuantity = Math.max(1, Math.floor(Number(quantity) || 1));
+    const parsedAcquisition = acquisitionPrice.trim() ? Number(acquisitionPrice) : undefined;
+
+    setBusy(true);
+    try {
+      await onSave({
+        quantity: parsedQuantity,
+        acquisitionPriceUsd:
+          typeof parsedAcquisition === "number" && Number.isFinite(parsedAcquisition)
+            ? parsedAcquisition
+            : undefined,
+        notes: notes.trim() || undefined,
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    setBusy(true);
+    try {
+      await onRemove();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-2 md:grid-cols-3">
+        <label className="space-y-1">
+          <span className="text-[10px] capitalize tracking-wide text-slate-400">Quantity</span>
+          <input
+            type="number"
+            min={1}
+            value={quantity}
+            onChange={(event) => setQuantity(event.target.value)}
+            className="w-full rounded-lg border border-white/10 bg-slate-950/50 px-2 py-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
+          />
+        </label>
+        <label className="space-y-1">
+          <span className="text-[10px] capitalize tracking-wide text-slate-400">Price Paid</span>
+          <input
+            type="number"
+            min={0}
+            step="0.01"
+            value={acquisitionPrice}
+            onChange={(event) => setAcquisitionPrice(event.target.value)}
+            className="w-full rounded-lg border border-white/10 bg-slate-950/50 px-2 py-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
+          />
+        </label>
+        <label className="space-y-1">
+          <span className="text-[10px] capitalize tracking-wide text-slate-400">Notes</span>
+          <input
+            value={notes}
+            onChange={(event) => setNotes(event.target.value)}
+            className="w-full rounded-lg border border-white/10 bg-slate-950/50 px-2 py-2 text-sm text-slate-100 outline-none focus:border-cyan-300/40"
+          />
+        </label>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={save}
+          disabled={busy}
+          className="rounded-lg border border-cyan-300/30 bg-cyan-500/15 px-3 py-2 text-xs font-semibold capitalize tracking-wide text-cyan-100 disabled:opacity-60"
+        >
+          {busy ? "Saving..." : "Save Changes"}
+        </button>
+        <button
+          type="button"
+          onClick={remove}
+          disabled={busy}
+          className="rounded-lg border border-rose-300/30 bg-rose-500/15 px-3 py-2 text-xs font-semibold capitalize tracking-wide text-rose-100 disabled:opacity-60"
+        >
+          Remove Item
+        </button>
       </div>
     </div>
   );
@@ -1970,291 +2057,6 @@ function MultiSeriesChart({
   );
 }
 
-function ComboSeriesChart({
-  labels,
-  bars,
-  line,
-  showRangeControls = true,
-}: {
-  labels: string[];
-  bars: { label: string; color: string; values: Array<number | undefined> };
-  line: { label: string; color: string; values: Array<number | undefined> };
-  showRangeControls?: boolean;
-}) {
-  const [range, setRange] = useState<ChartRangeOption>("12M");
-  const plotTop = 12;
-  const width = 560;
-  const plotHeight = 156;
-  const innerPlotHeight = plotHeight - plotTop;
-  const axisHeight = 32;
-  const height = plotHeight + axisHeight;
-  const plotPadding = 18;
-  const rangeLimit = chartRangeLimit(range);
-  const startIndex = rangeLimit === null ? 0 : Math.max(0, labels.length - rangeLimit);
-  const visibleLabels = labels.slice(startIndex);
-  const visibleBarValues = bars.values.slice(startIndex);
-  const visibleLineValues = line.values.slice(startIndex);
-  const plotLeft = plotPadding;
-  const plotRight = width - plotPadding;
-  const plotWidth = plotRight - plotLeft;
-  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-  const barPoints = visibleBarValues.filter((value): value is number => typeof value === "number" && value > 0);
-  const linePoints = visibleLineValues.filter((value): value is number => typeof value === "number");
-  const maxBar = Math.max(1, ...barPoints);
-  const maxLine = Math.max(1, ...linePoints);
-  const bandWidth = visibleLabels.length ? plotWidth / visibleLabels.length : plotWidth;
-
-  if (!visibleLabels.length || (!barPoints.length && !linePoints.length)) {
-    return <p className="text-sm text-slate-300">Not enough sealed market history to chart yet.</p>;
-  }
-
-  const hoveredLabel = hoverIndex !== null ? visibleLabels[hoverIndex] : null;
-  const hoveredBar = hoverIndex !== null ? visibleBarValues[hoverIndex] : undefined;
-  const hoveredLine = hoverIndex !== null ? visibleLineValues[hoverIndex] : undefined;
-  const hoveredX =
-    hoverIndex !== null
-      ? Math.min(plotRight - bandWidth / 2, plotLeft + hoverIndex * bandWidth + bandWidth / 2)
-      : null;
-  const linePath = visibleLineValues
-    .map((value, index) => {
-      if (typeof value !== "number") {
-        return null;
-      }
-      const x = Math.min(plotRight - bandWidth / 2, plotLeft + index * bandWidth + bandWidth / 2);
-      const y = plotTop + innerPlotHeight - (value / maxLine) * innerPlotHeight;
-      return `${index === 0 || typeof visibleLineValues[index - 1] !== "number" ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`;
-    })
-    .filter((segment): segment is string => Boolean(segment))
-    .join(" ");
-
-  return (
-    <div className="space-y-3">
-      {showRangeControls ? (
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap gap-2">
-            {(["3M", "6M", "12M", "ALL"] as ChartRangeOption[]).map((option) => (
-              <button
-                key={option}
-                type="button"
-                onClick={() => {
-                  setRange(option);
-                  setHoverIndex(null);
-                }}
-                className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold text-slate-100 transition ${
-                  range === option
-                    ? "border-cyan-300/40 bg-cyan-500/18 text-cyan-100"
-                    : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06]"
-                }`}
-              >
-                {option}
-              </button>
-            ))}
-          </div>
-          <p className="text-[11px] text-slate-400">Range</p>
-        </div>
-      ) : null}
-      <div className="relative">
-        <svg
-          viewBox={`0 0 ${width} ${height}`}
-          className="h-52 w-full rounded-xl bg-slate-950/30"
-          role="img"
-          aria-label="Sealed supply and market value chart"
-          onMouseLeave={() => setHoverIndex(null)}
-        >
-          {[0.25, 0.5, 0.75].map((ratio) => (
-            <line
-              key={ratio}
-              x1={plotLeft}
-              x2={plotRight}
-              y1={plotTop + innerPlotHeight * ratio}
-              y2={plotTop + innerPlotHeight * ratio}
-              stroke="rgba(255,255,255,0.08)"
-              strokeWidth="1"
-            />
-          ))}
-          {visibleBarValues.map((value, index) => {
-            if (typeof value !== "number" || value <= 0) {
-              return null;
-            }
-            const barWidth = Math.max(10, bandWidth * 0.56);
-            const x = Math.min(
-              plotRight - barWidth,
-              Math.max(plotLeft, plotLeft + index * bandWidth + (bandWidth - barWidth) / 2),
-            );
-            const barHeight = (value / maxBar) * innerPlotHeight;
-            const y = plotTop + innerPlotHeight - barHeight;
-            return (
-              <rect
-                key={`${bars.label}-${visibleLabels[index]}`}
-                x={x}
-                y={y}
-                width={barWidth}
-                height={barHeight}
-                rx="8"
-                fill={bars.color}
-                opacity={hoverIndex === index ? 0.95 : 0.72}
-              />
-            );
-          })}
-          {linePath ? (
-            <path
-              d={linePath}
-              fill="none"
-              stroke={line.color}
-              strokeWidth="3"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          ) : null}
-          {visibleLineValues.map((value, index) => {
-            if (typeof value !== "number") {
-              return null;
-            }
-            const x = Math.min(plotRight - bandWidth / 2, plotLeft + index * bandWidth + bandWidth / 2);
-            const y = plotTop + innerPlotHeight - (value / maxLine) * innerPlotHeight;
-            return (
-              <circle
-                key={`${line.label}-marker-${index}`}
-                cx={x}
-                cy={y}
-                r="2.9"
-                fill={line.color}
-                stroke="rgba(15,23,42,0.92)"
-                strokeWidth="1.5"
-                pointerEvents="none"
-              />
-            );
-          })}
-          {hoveredX !== null ? (
-            <line
-              x1={hoveredX}
-              x2={hoveredX}
-              y1={plotTop}
-              y2={plotHeight}
-              stroke="rgba(255,255,255,0.16)"
-              strokeWidth="1"
-              strokeDasharray="4 4"
-            />
-          ) : null}
-          {hoverIndex !== null && typeof hoveredLine === "number" && hoveredX !== null ? (
-            <circle
-              cx={hoveredX}
-              cy={plotTop + innerPlotHeight - (hoveredLine / maxLine) * innerPlotHeight}
-              r="4.5"
-              fill={line.color}
-              stroke="rgba(15,23,42,0.95)"
-              strokeWidth="2"
-            />
-          ) : null}
-          <line
-            x1={plotLeft}
-            x2={plotRight}
-            y1={plotHeight}
-            y2={plotHeight}
-            stroke="rgba(255,255,255,0.12)"
-            strokeWidth="1"
-          />
-          {visibleLabels.map((label, index) => {
-            const xCenter = Math.min(plotRight - bandWidth / 2, plotLeft + index * bandWidth + bandWidth / 2);
-            const xStart = Math.max(plotLeft, plotLeft + index * bandWidth);
-            const rectWidth = Math.min(plotRight - xStart, bandWidth);
-
-            return (
-              <g key={`${label}-${index}`}>
-                <line
-                  x1={xCenter}
-                  x2={xCenter}
-                  y1={plotHeight}
-                  y2={plotHeight + 6}
-                  stroke="rgba(255,255,255,0.14)"
-                  strokeWidth="1"
-                />
-                <text
-                  x={xCenter}
-                  y={height - 8}
-                  textAnchor="middle"
-                  fill={hoverIndex === index ? "rgba(226,232,240,1)" : "rgba(148,163,184,0.9)"}
-                  fontSize="11"
-                >
-                  {label}
-                </text>
-                <rect
-                  x={xStart}
-                  y="0"
-                  width={rectWidth}
-                  height={height}
-                  fill="transparent"
-                  onMouseEnter={() => setHoverIndex(index)}
-                  onFocus={() => setHoverIndex(index)}
-                  onClick={() => setHoverIndex(index)}
-                />
-              </g>
-            );
-          })}
-        </svg>
-        {hoverIndex !== null && hoveredLabel ? (
-          <div
-            className="pointer-events-none absolute top-2 z-10 min-w-44 rounded-lg border border-white/10 bg-slate-950/90 px-3 py-2 text-xs text-slate-100 shadow-lg shadow-black/30"
-            style={{
-              left: hoveredX !== null ? `${Math.min(92, Math.max(8, (hoveredX / width) * 100))}%` : "50%",
-              transform: "translateX(-50%)",
-            }}
-          >
-            <p className="font-semibold text-slate-50">{hoveredLabel}</p>
-            <div className="mt-1 space-y-1">
-              <div className="flex items-center justify-between gap-3">
-                <span className="inline-flex items-center gap-2 text-slate-200">
-                  <span
-                    className="inline-block h-2.5 w-2.5 rounded-sm"
-                    style={{ backgroundColor: bars.color }}
-                    aria-hidden="true"
-                  />
-                  {bars.label}
-                </span>
-                <span className="font-medium text-slate-50">
-                  {typeof hoveredBar === "number" ? formatChartValue(hoveredBar, "number") : "No data"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <span className="inline-flex items-center gap-2 text-slate-200">
-                  <span
-                    className="inline-block h-2.5 w-2.5 rounded-full"
-                    style={{ backgroundColor: line.color }}
-                    aria-hidden="true"
-                  />
-                  {line.label}
-                </span>
-                <span className="font-medium text-slate-50">
-                  {typeof hoveredLine === "number" ? formatChartValue(hoveredLine, "currency") : "No data"}
-                </span>
-              </div>
-            </div>
-          </div>
-        ) : null}
-      </div>
-
-      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-300">
-        <span className="inline-flex items-center gap-2">
-          <span
-            className="inline-block h-2.5 w-2.5 rounded-sm"
-            style={{ backgroundColor: bars.color }}
-            aria-hidden="true"
-          />
-          {bars.label}
-        </span>
-        <span className="inline-flex items-center gap-2">
-          <span
-            className="inline-block h-2.5 w-2.5 rounded-full"
-            style={{ backgroundColor: line.color }}
-            aria-hidden="true"
-          />
-          {line.label}
-        </span>
-      </div>
-    </div>
-  );
-}
-
 function DualAxisLineChart({
   labels,
   left,
@@ -2663,15 +2465,18 @@ export function GemIndexApp() {
   const [quickRawNumber, setQuickRawNumber] = useState("");
   const [quickRawSelectedCardId, setQuickRawSelectedCardId] = useState("");
   const [quickRawCondition, setQuickRawCondition] = useState<RawCardCondition>("NM");
+  const [quickRawAcquisitionPrice, setQuickRawAcquisitionPrice] = useState("");
   const [quickSealedSetName, setQuickSealedSetName] = useState("");
   const [quickSealedType, setQuickSealedType] = useState<"ALL" | string>("ALL");
   const [quickSealedSelectedProductId, setQuickSealedSelectedProductId] = useState("");
+  const [quickSealedAcquisitionPrice, setQuickSealedAcquisitionPrice] = useState("");
   const [pokemonGalleryTypes, setPokemonGalleryTypes] = useState<PokemonGalleryTypeApi[]>(DEFAULT_GALLERY_TYPE_API_OPTIONS);
   const [quickGradedQuery, setQuickGradedQuery] = useState("");
   const [quickGradedSelectedValue, setQuickGradedSelectedValue] = useState("");
   const [quickGradedGrader, setQuickGradedGrader] = useState<"PSA" | "TAG">("PSA");
   const [quickGradedCertificationNumber, setQuickGradedCertificationNumber] = useState("");
   const [quickGradedGrade, setQuickGradedGrade] = useState("10");
+  const [quickGradedAcquisitionPrice, setQuickGradedAcquisitionPrice] = useState("");
   const [selectedPortfolioView, setSelectedPortfolioView] = useState<"ALL" | string>("ALL");
   const [newPortfolioName, setNewPortfolioName] = useState("");
   const [selectedSealedSetId, setSelectedSealedSetId] = useState("");
@@ -2679,9 +2484,7 @@ export function GemIndexApp() {
     useState<SealedMarketTypeFilter>("BOOSTER_BOX");
   const [selectedSetRatioSetId, setSelectedSetRatioSetId] = useState("");
   const [setRatioHistoryRange, setSetRatioHistoryRange] = useState<ChartRangeOption>("12M");
-  const [cardSearch, setCardSearch] = useState("");
-  const [searchDropdownOpen, setSearchDropdownOpen] = useState(false);
-  const [searchDropdownIndex, setSearchDropdownIndex] = useState(0);
+  const [cardSearch] = useState("");
   const [headerBackgroundId, setHeaderBackgroundId] = useState<HeaderBackgroundId>("INVESTIGE_BRAND");
   const [settingsSubsection, setSettingsSubsection] = useState<
     "ACCOUNT" | "HEADER_BACKGROUND" | "DATA_SOURCES" | "BILLING_INFORMATION" | "ALERTS"
@@ -2708,14 +2511,6 @@ export function GemIndexApp() {
   const [cardAlertThreshold, setCardAlertThreshold] = useState("");
   const [cardAlertLookback, setCardAlertLookback] = useState("3");
   const [cardAlertBusy, setCardAlertBusy] = useState(false);
-  const [sealedAlertCondition, setSealedAlertCondition] = useState<AlertRuleApi["condition"]>("PRICE_BELOW");
-  const [sealedAlertThreshold, setSealedAlertThreshold] = useState("");
-  const [sealedAlertLookback, setSealedAlertLookback] = useState("3");
-  const [sealedAlertBusy, setSealedAlertBusy] = useState(false);
-  const [setAlertCondition, setSetAlertCondition] = useState<AlertRuleApi["condition"]>("PRICE_BELOW");
-  const [setAlertThreshold, setSetAlertThreshold] = useState("");
-  const [setAlertLookback, setSetAlertLookback] = useState("3");
-  const [setAlertBusy, setSetAlertBusy] = useState(false);
 
   useEffect(() => {
     const stored = window.localStorage.getItem(HEADER_BACKGROUND_STORAGE_KEY);
@@ -2827,36 +2622,6 @@ export function GemIndexApp() {
         setAdminSealedSales([]);
       }
     }
-  }
-
-  function applyGlobalSearch(value: string) {
-    setCardSearch(value);
-
-    const nextQuery = normalizeSearchText(value);
-    if (!nextQuery) {
-      setSearchDropdownOpen(false);
-      setSearchDropdownIndex(0);
-      setQuickSealedId("");
-      return;
-    }
-    setSearchDropdownOpen(true);
-    setSearchDropdownIndex(0);
-  }
-
-  function selectSearchCard(card: CardApi) {
-    setQuickCardId(card.cardId);
-    setQuickSealedId("");
-    setActiveTab("CARD_DETAILS");
-    setSearchDropdownOpen(false);
-    setSearchDropdownIndex(0);
-  }
-
-  function selectSearchSealed(item: SealedSearchMatch) {
-    setQuickCardId("");
-    setQuickSealedId(item.id);
-    setActiveTab("SEALED_ANALYTICS");
-    setSearchDropdownOpen(false);
-    setSearchDropdownIndex(0);
   }
 
   function openSettingsSubsection(subsection: "ACCOUNT" | "HEADER_BACKGROUND" | "DATA_SOURCES" | "BILLING_INFORMATION" | "ALERTS") {
@@ -3182,7 +2947,9 @@ export function GemIndexApp() {
       body: "{}",
     });
     setAlertRules(out.rules);
-    setAlertEvents((current) => current.filter((item) => item.ruleId !== ruleId));
+    const nextEvents = alertEvents.filter((item) => item.ruleId !== ruleId);
+    setAlertEvents(nextEvents);
+    setAlertUnreadCount(nextEvents.filter((item) => !item.readAt).length);
   }
 
   async function markAlertEventRead(eventId: string) {
@@ -3529,6 +3296,18 @@ export function GemIndexApp() {
       setMessage("Create a portfolio first.");
       return;
     }
+    const parsedAcquisitionPrice = quickRawAcquisitionPrice.trim()
+      ? Number(quickRawAcquisitionPrice)
+      : undefined;
+    if (
+      quickRawAcquisitionPrice.trim() &&
+      (typeof parsedAcquisitionPrice !== "number" ||
+        !Number.isFinite(parsedAcquisitionPrice) ||
+        parsedAcquisitionPrice < 0)
+    ) {
+      setMessage("Enter a valid paid price for the raw card.");
+      return;
+    }
     await api("/api/collection", {
       method: "POST",
       body: JSON.stringify({
@@ -3537,21 +3316,10 @@ export function GemIndexApp() {
         ownershipType: "RAW",
         rawCondition: quickRawCondition,
         quantity: 1,
+        acquisitionPriceUsd: parsedAcquisitionPrice,
       }),
     });
     setMessage(`Raw card (${quickRawCondition}) added to Personal Collection.`);
-    await refresh(user?.role === "ADMIN");
-  }
-
-  async function quickAddWishlist() {
-    if (!can("PORTFOLIO_TRACKING")) {
-      setMessage("Upgrade to Pro for portfolio tracking.");
-      return;
-    }
-    await api("/api/wishlist", {
-      method: "POST",
-      body: JSON.stringify({ cardId: quickCardId, priority: 2 }),
-    });
     await refresh(user?.role === "ADMIN");
   }
 
@@ -3568,12 +3336,25 @@ export function GemIndexApp() {
       setMessage("Create a portfolio first.");
       return;
     }
+    const parsedAcquisitionPrice = quickSealedAcquisitionPrice.trim()
+      ? Number(quickSealedAcquisitionPrice)
+      : undefined;
+    if (
+      quickSealedAcquisitionPrice.trim() &&
+      (typeof parsedAcquisitionPrice !== "number" ||
+        !Number.isFinite(parsedAcquisitionPrice) ||
+        parsedAcquisitionPrice < 0)
+    ) {
+      setMessage("Enter a valid paid price for the sealed product.");
+      return;
+    }
     await api("/api/sealed", {
       method: "POST",
       body: JSON.stringify({
         portfolioId: activePortfolioIdForActions,
         productId: activeQuickSealedProductId,
         quantity: 1,
+        acquisitionPriceUsd: parsedAcquisitionPrice,
       }),
     });
     setMessage("Sealed product added to Sealed Collection.");
@@ -3601,6 +3382,18 @@ export function GemIndexApp() {
     }
 
     const certificationNumber = quickGradedCertificationNumber.trim() || undefined;
+    const parsedAcquisitionPrice = quickGradedAcquisitionPrice.trim()
+      ? Number(quickGradedAcquisitionPrice)
+      : undefined;
+    if (
+      quickGradedAcquisitionPrice.trim() &&
+      (typeof parsedAcquisitionPrice !== "number" ||
+        !Number.isFinite(parsedAcquisitionPrice) ||
+        parsedAcquisitionPrice < 0)
+    ) {
+      setMessage("Enter a valid paid price for the graded item.");
+      return;
+    }
 
     if (activeQuickGradedOption.kind === "card") {
       await api("/api/collection", {
@@ -3613,6 +3406,7 @@ export function GemIndexApp() {
           grade: parsedGrade,
           certificationNumber,
           quantity: 1,
+          acquisitionPriceUsd: parsedAcquisitionPrice,
         }),
       });
       setMessage("Graded card added to Personal Collection.");
@@ -3626,6 +3420,7 @@ export function GemIndexApp() {
           grade: parsedGrade,
           certificationNumber,
           quantity: 1,
+          acquisitionPriceUsd: parsedAcquisitionPrice,
           notes: certificationNumber
             ? `Graded ${quickGradedGrader} ${parsedGrade} | Slab #: ${certificationNumber}`
             : `Graded ${quickGradedGrader} ${parsedGrade}`,
@@ -3634,6 +3429,27 @@ export function GemIndexApp() {
       setMessage("Graded sealed item added to Sealed Collection.");
     }
 
+    await refresh(user?.role === "ADMIN");
+  }
+
+  async function saveCollectionItem(
+    id: string,
+    changes: { quantity: number; acquisitionPriceUsd?: number; notes?: string },
+  ) {
+    await api("/api/collection", {
+      method: "PATCH",
+      body: JSON.stringify({ id, ...changes }),
+    });
+    setMessage("Collection item updated.");
+    await refresh(user?.role === "ADMIN");
+  }
+
+  async function removeCollectionItem(id: string) {
+    await api("/api/collection", {
+      method: "DELETE",
+      body: JSON.stringify({ id }),
+    });
+    setMessage("Collection item removed.");
     await refresh(user?.role === "ADMIN");
   }
 
@@ -3824,15 +3640,17 @@ export function GemIndexApp() {
       <main className="mx-auto max-w-3xl p-4 sm:p-8">
         <section className="rounded-3xl bg-[radial-gradient(circle_at_18%_20%,rgba(214,96,198,0.14),transparent_24%),radial-gradient(circle_at_82%_18%,rgba(52,178,255,0.16),transparent_28%),linear-gradient(150deg,#182f61_0%,#0f2551_45%,#0b1f45_100%)] px-4 py-2 text-white shadow-xl shadow-black/30 sm:px-5 sm:py-3">
           <div className="flex flex-col items-center gap-1.5 text-center">
-            <Image
-              src={INVESTIGE_LOGO_SRC}
-              alt="Investige logo"
-              width={1260}
-              height={420}
-              priority
-              unoptimized
-              className="h-20 w-auto object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.35)] sm:h-24"
-            />
+            <div className="w-full" style={{ maxWidth: "10rem" }}>
+              <Image
+                src={INVESTIGE_LOGO_SRC}
+                alt="Investige logo"
+                width={3068}
+                height={772}
+                priority
+                unoptimized
+                className="h-auto w-full object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,0.35)]"
+              />
+            </div>
             <p className="text-sm text-cyan-100">Register or Sign In</p>
           </div>
 
@@ -4372,7 +4190,6 @@ export function GemIndexApp() {
   const recentIndexRows = indexSeries.slice(-12).reverse();
   const topUndervaluedAlerts = dashboard?.topUndervalued ?? [];
   const flipperSignalAlerts = dashboard?.flipperSignals ?? [];
-  const topArbitrageAlerts = dashboard?.topArbitrage ?? [];
   const totalRawUniverse = cards.reduce((sum, card) => sum + Math.max(card.rawPrice, 0), 0) || 1;
   const selectedCardChartLabels = selectedCard?.series.map((point) => point.date.slice(0, 7)) ?? [];
   const selectedCardChartSeries = selectedCard
@@ -4604,12 +4421,6 @@ export function GemIndexApp() {
     highestVolatility: sealedVolatilityLeaders[0]?.metrics.volatility ?? 0,
     trackedProducts: sealedProducts.length,
   };
-  const dropdownCardMatches = query ? matchingCards.slice(0, 5) : [];
-  const dropdownSealedMatches = query ? matchingSealedProducts.slice(0, 5) : [];
-  const searchDropdownOptions = [
-    ...dropdownCardMatches.map((card) => ({ kind: "CARD" as const, card })),
-    ...dropdownSealedMatches.map((item) => ({ kind: "SEALED" as const, item })),
-  ];
   const customPortfolios = portfolios.filter((portfolio) => portfolio.name !== "Main Portfolio");
   const activePortfolioIdForActions =
     selectedPortfolioView === "ALL" ? portfolios[0]?.id ?? "" : selectedPortfolioView;
@@ -4623,13 +4434,12 @@ export function GemIndexApp() {
   const portfolioScopedSealed = sealed.filter((item) =>
     selectedPortfolioView === "ALL" ? true : item.portfolioId === selectedPortfolioView,
   );
-  const showSearchDropdown = searchDropdownOpen && Boolean(query);
-  const effectiveSearchDropdownIndex = searchDropdownOptions.length
-    ? Math.min(searchDropdownIndex, searchDropdownOptions.length - 1)
-    : 0;
   const quickPortfolioActionsPanel = (
     <section className="section-panel rounded-xl p-3">
-      <h3 className="mb-2 text-sm font-semibold text-slate-200">Add Portfolio Items</h3>
+      <h3 className="mb-2 text-sm font-semibold text-slate-200">Search and Add to Portfolio</h3>
+      <p className="mb-3 text-sm text-slate-300">
+        Search for a card or sealed product and add it directly to one of your portfolios.
+      </p>
       {!can("PORTFOLIO_TRACKING") ? (
         <p className="text-sm text-slate-300">
           Upgrade to Pro to track collection, wishlist, and sealed positions.
@@ -4680,7 +4490,7 @@ export function GemIndexApp() {
             <p className="text-sm text-slate-300">
               Enter the card name and card number, then choose the exact card to add it as a raw card.
             </p>
-            <div className="grid gap-3 md:grid-cols-[2fr_1fr_1fr]">
+            <div className="grid gap-3 md:grid-cols-[2fr_1fr_1fr_1fr]">
               <label className="space-y-1">
                 <span className="text-xs text-slate-300">Card Name</span>
                 <input
@@ -4715,6 +4525,19 @@ export function GemIndexApp() {
                     </option>
                   ))}
                 </select>
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs text-slate-300">Price Paid</span>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  className="w-full rounded border border-white/20 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-300/60"
+                  value={quickRawAcquisitionPrice}
+                  onChange={(event) => setQuickRawAcquisitionPrice(event.target.value)}
+                  placeholder="125.00"
+                  disabled={!can("PORTFOLIO_TRACKING")}
+                />
               </label>
             </div>
             <label className="space-y-1">
@@ -4752,7 +4575,7 @@ export function GemIndexApp() {
             <p className="text-sm text-slate-300">
               Enter the set name, choose the sealed product type, then select the exact product to add it to your sealed collection.
             </p>
-            <div className="grid gap-3 md:grid-cols-[2fr_1fr]">
+            <div className="grid gap-3 md:grid-cols-[2fr_1fr_1fr]">
               <label className="space-y-1">
                 <span className="text-xs text-slate-300">Set Name</span>
                 <input
@@ -4779,6 +4602,19 @@ export function GemIndexApp() {
                     </option>
                   ))}
                 </select>
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs text-slate-300">Price Paid</span>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  className="w-full rounded border border-white/20 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-300/60"
+                  value={quickSealedAcquisitionPrice}
+                  onChange={(event) => setQuickSealedAcquisitionPrice(event.target.value)}
+                  placeholder="299.99"
+                  disabled={!can("PORTFOLIO_TRACKING")}
+                />
               </label>
             </div>
             <label className="space-y-1">
@@ -4845,7 +4681,7 @@ export function GemIndexApp() {
                 )}
               </select>
             </label>
-            <div className="grid gap-3 md:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-4">
               <label className="space-y-1">
                 <span className="text-xs text-slate-300">Grading Company</span>
                 <select
@@ -4878,6 +4714,19 @@ export function GemIndexApp() {
                   step={1}
                   value={quickGradedGrade}
                   onChange={(event) => setQuickGradedGrade(event.target.value)}
+                  disabled={!can("PORTFOLIO_TRACKING")}
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="text-xs text-slate-300">Price Paid</span>
+                <input
+                  className="w-full rounded border border-white/20 bg-slate-900/60 px-3 py-2 text-sm text-slate-100 outline-none focus:border-cyan-300/60"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={quickGradedAcquisitionPrice}
+                  onChange={(event) => setQuickGradedAcquisitionPrice(event.target.value)}
+                  placeholder="450.00"
                   disabled={!can("PORTFOLIO_TRACKING")}
                 />
               </label>
@@ -4916,16 +4765,23 @@ export function GemIndexApp() {
     );
   };
 
-  const collectionPositionRows = portfolioScopedCollection.map((item) => {
+  const catalogCardForCollectionItem = (item: CollectionItem): CardApi | null => {
+    if (!item.card) {
+      return null;
+    }
+
+    return (
+      cards.find(
+        (card) =>
+          card.cardName === item.card?.name &&
+          card.cardNumber === item.card?.cardNumber &&
+          card.setCode.toLowerCase() === item.card?.setCode.toLowerCase(),
+      ) ?? null
+    );
+  };
+
+  const marketValueForCollectionItem = (item: CollectionItem): number => {
     const metric = metricForCardRef(item.card);
-    const catalogCard = item.card
-      ? cards.find(
-          (card) =>
-            card.cardName === item.card?.name &&
-            card.cardNumber === item.card?.cardNumber &&
-            card.setCode.toLowerCase() === item.card?.setCode.toLowerCase(),
-        ) ?? null
-      : null;
     const rawCondition = item.ownershipType === "RAW" ? normalizeRawCardCondition(item.rawCondition) : undefined;
     const unitPrice =
       item.ownershipType === "GRADED" && item.grade === 10
@@ -4933,7 +4789,14 @@ export function GemIndexApp() {
           ? metric?.tag10Price ?? metric?.rawPrice ?? 0
           : metric?.psa10Price ?? metric?.rawPrice ?? 0
         : rawConditionAdjustedPrice(metric?.rawPrice, rawCondition);
-    const marketValue = unitPrice * item.quantity;
+
+    return unitPrice * item.quantity;
+  };
+
+  const collectionPositionRows = portfolioScopedCollection.map((item) => {
+    const catalogCard = catalogCardForCollectionItem(item);
+    const rawCondition = item.ownershipType === "RAW" ? normalizeRawCardCondition(item.rawCondition) : undefined;
+    const marketValue = marketValueForCollectionItem(item);
 
     return {
       id: item.id,
@@ -5329,34 +5192,34 @@ export function GemIndexApp() {
                       key={kpi.id}
                       type="button"
                       onClick={() => setExpandedDashboardKpi(expanded ? null : kpi.id)}
-                      className={`rounded-xl p-3 text-left transition ${
+                      className={`rounded-xl p-3 text-center transition ${
                         expanded
                           ? "bg-cyan-500/10 ring-1 ring-cyan-300/30"
                           : "bg-white/[0.035] hover:bg-white/[0.05]"
                       }`}
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <span className="group/title relative inline-flex max-w-full">
-                            <span className="text-xs text-slate-300 underline decoration-dotted underline-offset-3">
+                      <div className="flex w-full flex-col items-center gap-2 text-center">
+                        <div className="flex w-full flex-col items-center text-center">
+                          <span className="group/title relative inline-flex max-w-full justify-center text-center">
+                            <span className="text-center text-xs text-slate-300 underline decoration-dotted underline-offset-3">
                               {kpi.title}
                             </span>
-                            <span className="pointer-events-none absolute left-0 top-full z-20 mt-2 hidden w-64 rounded-lg border border-white/10 bg-slate-950/95 px-3 py-2 text-[11px] normal-case text-slate-100 shadow-lg shadow-black/35 group-hover/title:block">
+                            <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden w-64 -translate-x-1/2 rounded-lg border border-white/10 bg-slate-950/95 px-3 py-2 text-[11px] normal-case text-slate-100 shadow-lg shadow-black/35 group-hover/title:block">
                               {kpi.summary}
                             </span>
                           </span>
-                          <p className="mt-1 text-lg font-semibold text-slate-100">{kpi.value}</p>
+                          <p className="mt-1 text-center text-lg font-semibold text-slate-100">{kpi.value}</p>
                         </div>
-                        <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] font-semibold capitalize tracking-wide text-slate-200">
+                        <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-center text-[10px] font-semibold capitalize tracking-wide text-slate-200">
                           {kpi.status}
                         </span>
                       </div>
-                      <p className="mt-2 text-xs text-cyan-100">{kpi.context}</p>
+                      <p className="mt-2 text-center text-xs text-cyan-100">{kpi.context}</p>
                       <p className="mt-2 text-[11px] capitalize tracking-wide text-slate-400">
                         {expanded ? "Hide Details" : "Click For Details"}
                       </p>
                       {expanded ? (
-                        <div className="mt-3 space-y-2 rounded-lg bg-black/20 p-3">
+                        <div className="mt-3 space-y-2 rounded-lg bg-black/20 p-3 text-center">
                           <div>
                             <p className="text-[10px] font-semibold capitalize tracking-wide text-slate-400">
                               Why It Matters
@@ -7062,42 +6925,99 @@ export function GemIndexApp() {
 
               <section className="section-panel rounded-xl p-3">
                 <h3 className="mb-2 text-sm font-semibold text-slate-200">Card Holdings</h3>
-                {collectionPositionRows.length ? (
+                {portfolioScopedCollection.length ? (
                   <AnalyticsDataTable
-                    rows={collectionPositionRows}
-                    getRowId={(row) => row.id}
-                    gridClassName="grid-cols-[1.4fr_1.2fr_1fr_0.9fr_0.9fr_0.9fr_1fr]"
+                    rows={portfolioScopedCollection}
+                    getRowId={(item) => item.id}
+                    gridClassName="grid-cols-[1.4fr_1.2fr_1fr_0.8fr_0.8fr_0.8fr_0.9fr_1fr_auto]"
                     maxHeightClassName="max-h-[28rem]"
                     emptyMessage="No card holdings are loaded for this portfolio view."
+                    expandableColumnKey="actions"
+                    renderExpandedRow={(item) => (
+                      <CollectionItemEditor
+                        item={item}
+                        onSave={(changes) => saveCollectionItem(item.id, changes)}
+                        onRemove={() => removeCollectionItem(item.id)}
+                      />
+                    )}
                     columns={[
                       {
                         key: "label",
                         label: "Card",
-                        value: (row) => row.label,
-                        render: (row) => (
-                          <CardCell imageUrl={row.imageUrl} name={row.cardName} number={row.cardNumber} />
-                        ),
+                        value: (item) =>
+                          item.card ? `${item.card.name} ${item.card.cardNumber}` : "Unknown card",
+                        render: (item) => {
+                          const catalogCard = catalogCardForCollectionItem(item);
+                          return (
+                            <CardCell
+                              imageUrl={
+                                item.card?.imageUrl ??
+                                item.card?.imageLargeUrl ??
+                                catalogCard?.imageUrl ??
+                                catalogCard?.imageLargeUrl
+                              }
+                              name={item.card?.name ?? "Unknown card"}
+                              number={item.card?.cardNumber}
+                            />
+                          );
+                        },
                       },
-                      { key: "setName", label: "Set", value: (row) => row.setName },
-                      { key: "portfolioName", label: "Portfolio", value: (row) => row.portfolioName, filterable: selectedPortfolioView === "ALL" },
-                      { key: "ownershipType", label: "Type", value: (row) => row.ownershipType },
+                      {
+                        key: "setName",
+                        label: "Set",
+                        value: (item) =>
+                          item.card?.setName ??
+                          catalogCardForCollectionItem(item)?.setName ??
+                          setCodeLabel(item.card?.setCode),
+                      },
+                      {
+                        key: "portfolioName",
+                        label: "Portfolio",
+                        value: (item) => item.portfolioName ?? "Main Portfolio",
+                        filterable: selectedPortfolioView === "ALL",
+                      },
+                      { key: "ownershipType", label: "Type", value: (item) => item.ownershipType },
                       {
                         key: "rawCondition",
                         label: "Condition",
-                        value: (row) => row.rawCondition ?? "-",
-                        render: (row) => (row.ownershipType === "RAW" ? (row.rawCondition ?? "NM") : "-"),
+                        value: (item) =>
+                          item.ownershipType === "RAW"
+                            ? normalizeRawCardCondition(item.rawCondition)
+                            : "-",
+                        render: (item) =>
+                          item.ownershipType === "RAW"
+                            ? normalizeRawCardCondition(item.rawCondition)
+                            : "-",
                       },
                       {
                         key: "quantity",
                         label: "Quantity",
-                        value: (row) => row.quantity,
-                        render: (row) => `x${row.quantity}`,
+                        value: (item) => item.quantity,
+                        render: (item) => `x${item.quantity}`,
+                      },
+                      {
+                        key: "acquisitionPriceUsd",
+                        label: "Paid Price",
+                        value: (item) => item.acquisitionPriceUsd ?? 0,
+                        render: (item) => usd(item.acquisitionPriceUsd),
                       },
                       {
                         key: "marketValue",
                         label: "Market Value",
-                        value: (row) => row.marketValue,
-                        render: (row) => usd(row.marketValue),
+                        value: (item) => marketValueForCollectionItem(item),
+                        render: (item) => usd(marketValueForCollectionItem(item)),
+                      },
+                      {
+                        key: "actions",
+                        label: "Actions",
+                        value: () => "",
+                        sortable: false,
+                        filterable: false,
+                        render: () => (
+                          <span className="inline-flex rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] font-semibold capitalize tracking-wide text-slate-200">
+                            Manage
+                          </span>
+                        ),
                       },
                     ]}
                   />
@@ -7181,6 +7101,8 @@ export function GemIndexApp() {
             <p className="text-sm text-slate-300">Upgrade to Pro to track wishlist items.</p>
           ) : (
             <div className="space-y-4">
+              {quickPortfolioActionsPanel}
+
               <section className="section-panel rounded-xl p-3">
                 <h3 className="mb-2 text-sm font-semibold text-slate-200">Card Wishlist</h3>
                 <AnalyticsDataTable
@@ -7310,7 +7232,7 @@ export function GemIndexApp() {
             <AnalyticsDataTable
               rows={sealed}
               getRowId={(item) => item.id}
-              gridClassName="grid-cols-[2fr_1fr_1fr_auto]"
+              gridClassName="grid-cols-[2fr_0.9fr_1fr_1fr_auto]"
               emptyMessage="No sealed inventory yet."
               expandableColumnKey="actions"
               renderExpandedRow={(item) => (
@@ -7344,6 +7266,12 @@ export function GemIndexApp() {
                   label: "Quantity",
                   value: (item) => item.quantity,
                   render: (item) => `x${item.quantity}`,
+                },
+                {
+                  key: "acquisitionPriceUsd",
+                  label: "Paid Price",
+                  value: (item) => item.acquisitionPriceUsd ?? 0,
+                  render: (item) => usd(item.acquisitionPriceUsd),
                 },
                 {
                   key: "estimatedValueUsd",
@@ -7539,6 +7467,137 @@ export function GemIndexApp() {
                   <p className="mt-1 text-xs text-slate-400">{option.description}</p>
                 </button>
               ))}
+            </div>
+          </section>
+        ) : null}
+
+        {settingsSubsection === "ALERTS" ? (
+          <section className="section-panel rounded-xl p-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h3 className="font-semibold">Alerts</h3>
+                <p className="mt-1 text-sm text-slate-300">
+                  Review alert rules and the most recent triggered events. Unread events: {alertUnreadCount}.
+                </p>
+              </div>
+              <button
+                type="button"
+                disabled={!alertEvents.some((event) => !event.readAt)}
+                onClick={() => {
+                  void markAllAlertEventsRead().catch((error) => {
+                    setMessage(error instanceof Error ? error.message : "Could not mark alerts as read.");
+                  });
+                }}
+                className="rounded border border-white/20 bg-white/5 px-3 py-1 text-sm text-slate-100 disabled:opacity-50"
+              >
+                Mark All Read
+              </button>
+            </div>
+
+            <div className="mt-4 grid gap-4 xl:grid-cols-2">
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className="text-sm font-semibold text-slate-100">Alert Rules</h4>
+                  <span className="text-xs text-slate-400">{alertRules.length} total</span>
+                </div>
+                <div className="mt-3 space-y-3">
+                  {alertRules.length ? (
+                    alertRules.map((rule) => (
+                      <div key={rule.id} className="rounded-xl border border-white/10 bg-black/15 p-3">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="space-y-1">
+                            <p className="text-sm font-semibold text-slate-100">{rule.entityLabel}</p>
+                            <p className="text-xs text-slate-300">
+                              {rule.entityType.replaceAll("_", " ")} | {formatAlertCondition(rule.condition)} |{" "}
+                              {isPercentAlertCondition(rule.condition)
+                                ? `${formatPercent(rule.thresholdValue)} over ${rule.lookbackMonths ?? 3}M`
+                                : usd(rule.thresholdValue)}
+                            </p>
+                            <p className="text-xs text-slate-400">
+                              Last triggered:{" "}
+                              {rule.lastTriggeredAt ? new Date(rule.lastTriggeredAt).toLocaleString() : "Never"}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void toggleAlertRule(rule, !rule.enabled).catch((error) => {
+                                  setMessage(error instanceof Error ? error.message : "Could not update alert rule.");
+                                });
+                              }}
+                              className={`rounded border px-3 py-1 text-xs font-semibold ${
+                                rule.enabled
+                                  ? "border-emerald-300/40 bg-emerald-500/20 text-emerald-100"
+                                  : "border-amber-300/40 bg-amber-500/20 text-amber-100"
+                              }`}
+                            >
+                              {rule.enabled ? "Enabled" : "Paused"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void deleteAlertRule(rule.id).catch((error) => {
+                                  setMessage(error instanceof Error ? error.message : "Could not delete alert rule.");
+                                });
+                              }}
+                              className="rounded border border-rose-300/40 bg-rose-500/20 px-3 py-1 text-xs font-semibold text-rose-100"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-slate-400">No alert rules yet. Create one from a card analytics page.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className="text-sm font-semibold text-slate-100">Triggered Events</h4>
+                  <span className="text-xs text-slate-400">{alertEvents.length} total</span>
+                </div>
+                <div className="mt-3 space-y-3">
+                  {alertEvents.length ? (
+                    alertEvents.map((event) => (
+                      <div key={event.id} className="rounded-xl border border-white/10 bg-black/15 p-3">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="space-y-1">
+                            <p className="text-sm font-semibold text-slate-100">{event.entityLabel}</p>
+                            <p className="text-xs text-slate-300">{event.message}</p>
+                            <p className="text-xs text-slate-400">
+                              Triggered {new Date(event.triggeredAt).toLocaleString()} | Current value{" "}
+                              {isPercentAlertCondition(event.condition) ? formatPercent(event.currentValue) : usd(event.currentValue)}
+                            </p>
+                          </div>
+                          {event.readAt ? (
+                            <span className="rounded border border-white/15 bg-white/5 px-3 py-1 text-xs text-slate-300">
+                              Read
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                void markAlertEventRead(event.id).catch((error) => {
+                                  setMessage(error instanceof Error ? error.message : "Could not mark alert as read.");
+                                });
+                              }}
+                              className="rounded border border-cyan-300/40 bg-cyan-500/20 px-3 py-1 text-xs font-semibold text-cyan-100"
+                            >
+                              Mark Read
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-slate-400">No alert events yet.</p>
+                  )}
+                </div>
+              </div>
             </div>
           </section>
         ) : null}
@@ -8153,21 +8212,23 @@ export function GemIndexApp() {
 
   return (
     <main className="mx-auto flex max-w-7xl flex-col gap-4 p-4 sm:p-8">
-      <section className="relative z-40 overflow-visible rounded-3xl border border-white/10 bg-transparent px-3 py-0.5 sm:px-4 sm:py-1">
+      <section className="relative z-40 overflow-visible rounded-3xl border border-white/10 bg-transparent px-3 py-1 sm:px-4 sm:py-1.5">
         <div className="relative z-10">
-          <div className="relative flex min-h-[4rem] items-center justify-center">
-            <div className="flex min-w-0 items-center justify-center">
-              <Image
-                src={INVESTIGE_LOGO_SRC}
-                alt="Investige logo"
-                width={1260}
-                height={420}
-                priority
-                unoptimized
-                className="h-16 w-auto object-contain drop-shadow-[0_10px_20px_rgba(0,0,0,0.35)] sm:h-20 lg:h-24"
-              />
+          <div className="relative flex items-center justify-center pt-6 sm:pt-7">
+            <div className="flex w-full min-w-0 items-center justify-center px-2 sm:px-6">
+              <div className="w-full" style={{ maxWidth: "19rem" }}>
+                <Image
+                  src={INVESTIGE_LOGO_SRC}
+                  alt="Investige logo"
+                  width={3068}
+                  height={772}
+                  priority
+                  unoptimized
+                  className="h-auto w-full object-contain drop-shadow-[0_10px_20px_rgba(0,0,0,0.35)]"
+                />
+              </div>
             </div>
-            <div className="absolute right-0 top-1/2 flex -translate-y-1/2 items-center gap-2">
+            <div className="absolute right-0 top-0 flex items-center gap-2">
               <div className="flex flex-col gap-0 text-right text-xs text-slate-300 sm:text-sm">
                 <p>
                   {user.name} ({user.role}) | {sync?.subscription.tier ?? user.subscriptionTier} plan
@@ -8182,149 +8243,6 @@ export function GemIndexApp() {
               >
                 Logout
               </button>
-            </div>
-          </div>
-          <div className="relative z-[60] -mt-1 flex justify-center">
-            <div className="relative w-full max-w-[15rem] sm:max-w-[17rem]">
-              <input
-                id="global-search"
-                value={cardSearch}
-                onChange={(event) => applyGlobalSearch(event.target.value)}
-                onFocus={() => {
-                  if (normalizeSearchText(cardSearch)) {
-                    setSearchDropdownOpen(true);
-                  }
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Escape") {
-                    setSearchDropdownOpen(false);
-                    setSearchDropdownIndex(0);
-                    return;
-                  }
-
-                  if (!searchDropdownOptions.length) {
-                    return;
-                  }
-
-                  if (event.key === "ArrowDown") {
-                    event.preventDefault();
-                    setSearchDropdownOpen(true);
-                    setSearchDropdownIndex((current) =>
-                      showSearchDropdown ? (current + 1) % searchDropdownOptions.length : 0,
-                    );
-                    return;
-                  }
-
-                  if (event.key === "ArrowUp") {
-                    event.preventDefault();
-                    setSearchDropdownOpen(true);
-                    setSearchDropdownIndex(
-                      (current) =>
-                        showSearchDropdown
-                          ? (current - 1 + searchDropdownOptions.length) % searchDropdownOptions.length
-                          : searchDropdownOptions.length - 1,
-                    );
-                    return;
-                  }
-
-                  if (event.key === "Enter" && showSearchDropdown) {
-                    event.preventDefault();
-                    const selected = searchDropdownOptions[effectiveSearchDropdownIndex];
-                    if (!selected) {
-                      return;
-                    }
-                    if (selected.kind === "CARD") {
-                      selectSearchCard(selected.card);
-                      return;
-                    }
-                    selectSearchSealed(selected.item);
-                  }
-                }}
-                placeholder="Search for raw, graded, or sealed product.."
-                className="w-full rounded-xl border border-white/20 bg-slate-900/60 px-4 py-1.5 text-sm text-slate-100 shadow-black/20 outline-none placeholder:text-slate-400 focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-400/20"
-              />
-              {showSearchDropdown ? (
-                <div className="absolute left-0 right-0 top-full z-[80] mt-2 rounded-2xl border border-black/70 bg-[#020617] p-3 shadow-2xl shadow-black/80 ring-1 ring-slate-800/80">
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <section className="space-y-2 rounded-xl bg-[#030712] p-2">
-                      <div className="flex items-center justify-between">
-                        <p className="text-[11px] font-semibold capitalize tracking-[0.18em] text-cyan-200">Cards</p>
-                        <span className="text-[11px] text-slate-400">{dropdownCardMatches.length}</span>
-                      </div>
-                      <div className="space-y-1">
-                        {dropdownCardMatches.length ? (
-                          dropdownCardMatches.map((card, index) => (
-                            <button
-                              key={card.cardId}
-                              type="button"
-                              onClick={() => selectSearchCard(card)}
-                              onMouseEnter={() => setSearchDropdownIndex(index)}
-                              className={`grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl px-2 py-2 text-left text-sm text-slate-100 hover:bg-black/30 ${
-                                effectiveSearchDropdownIndex === index ? "bg-cyan-500/10" : "bg-black/10"
-                              }`}
-                            >
-                              <ProductThumbnail
-                                imageUrl={card.imageUrl}
-                                alt={`${card.cardName} ${card.cardNumber}`}
-                                fallback={card.cardName}
-                                className="h-14 w-10 shrink-0"
-                              />
-                              <span>
-                                <span className="block font-medium">
-                                  {card.cardName} {card.cardNumber}
-                                </span>
-                                <span className="block text-xs text-slate-400">{setCodeLabel(card.setCode)}</span>
-                              </span>
-                              <span className="text-xs text-slate-300">
-                                {investmentMetricsReady ? usd(card.rawPrice) : "Pending"}
-                              </span>
-                            </button>
-                          ))
-                        ) : (
-                          <p className="rounded-xl bg-black/20 px-3 py-2 text-xs text-slate-400">No card matches found.</p>
-                        )}
-                      </div>
-                    </section>
-                    <section className="space-y-2 rounded-xl bg-[#030712] p-2">
-                      <div className="flex items-center justify-between">
-                        <p className="text-[11px] font-semibold capitalize tracking-[0.18em] text-fuchsia-200">Sealed Products</p>
-                        <span className="text-[11px] text-slate-400">{dropdownSealedMatches.length}</span>
-                      </div>
-                      <div className="space-y-1">
-                        {dropdownSealedMatches.length ? (
-                          dropdownSealedMatches.map((item, index) => (
-                            <button
-                              key={item.id}
-                              type="button"
-                              onClick={() => selectSearchSealed(item)}
-                              onMouseEnter={() => setSearchDropdownIndex(dropdownCardMatches.length + index)}
-                              className={`grid w-full grid-cols-[auto_1fr_auto] items-center gap-3 rounded-xl px-2 py-2 text-left text-sm text-slate-100 hover:bg-black/30 ${
-                                effectiveSearchDropdownIndex === dropdownCardMatches.length + index ? "bg-fuchsia-500/10" : "bg-black/10"
-                              }`}
-                            >
-                              <ProductThumbnail
-                                imageUrl={item.imageUrl}
-                                alt={item.productName}
-                                fallback={item.productName}
-                                className="h-14 w-10 shrink-0"
-                              />
-                              <span>
-                                <span className="block font-medium">{item.productName}</span>
-                                <span className="block text-xs text-slate-400">
-                                  {item.setName ?? setCodeLabel(item.setCode)} | {item.meta}
-                                </span>
-                              </span>
-                              <span className="text-xs text-slate-300">{item.valueLabel}</span>
-                            </button>
-                          ))
-                        ) : (
-                          <p className="rounded-xl bg-black/20 px-3 py-2 text-xs text-slate-400">No sealed matches found.</p>
-                        )}
-                      </div>
-                    </section>
-                  </div>
-                </div>
-              ) : null}
             </div>
           </div>
           {message ? <p className="text-sm text-slate-200">{message}</p> : null}
