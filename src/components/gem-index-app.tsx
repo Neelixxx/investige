@@ -3633,6 +3633,17 @@ export function GemIndexApp() {
     await refresh(true);
   }
 
+  const selectedHeaderBackground = HEADER_BACKGROUND_OPTIONS.find((option) => option.id === headerBackgroundId);
+  const signedInHeaderBackgroundStyle =
+    selectedHeaderBackground?.id && selectedHeaderBackground.id !== "DEFAULT" && selectedHeaderBackground.imageUrl
+      ? {
+          backgroundImage: `linear-gradient(180deg, rgba(4, 10, 24, 0.22), rgba(4, 10, 24, 0.34)), url(${selectedHeaderBackground.imageUrl})`,
+          backgroundPosition: "center center",
+          backgroundRepeat: "no-repeat",
+          backgroundSize: "cover",
+        }
+      : undefined;
+
   if (loading) return <main className="p-8">Loading Investige...</main>;
 
   if (!user) {
@@ -5184,7 +5195,7 @@ export function GemIndexApp() {
                 </p>
               </div>
 
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-3 md:grid-cols-3">
                 {dashboardKpis.map((kpi) => {
                   const expanded = expandedDashboardKpi === kpi.id;
                   return (
@@ -5453,7 +5464,14 @@ export function GemIndexApp() {
                   maxHeightClassName="max-h-72"
                   emptyMessage="No set volatility leaders are available yet."
                   columns={[
-                    { key: "name", label: "Set", value: (set) => set.name },
+                    {
+                      key: "name",
+                      label: "Set",
+                      value: (set) => set.name,
+                      align: "left",
+                      cellClassName: "justify-start",
+                      render: (set) => <SealedCell imageUrl={set.imageUrl} name={set.name} />,
+                    },
                     {
                       key: "totalSetValue",
                       label: "Set Value",
@@ -5500,15 +5518,15 @@ export function GemIndexApp() {
                   className="h-40 w-28 shrink-0"
                 />
                 <div className="flex-1 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="section-panel rounded-xl p-3">
+                <div className="section-panel rounded-xl p-3 text-center">
                   <p className="text-xs text-slate-300">Card</p>
                   <p className="text-sm font-semibold text-slate-100">
                     {selectedCard.cardName} {selectedCard.cardNumber}
                   </p>
                 </div>
-                <div className="section-panel rounded-xl p-3">
+                <div className="section-panel rounded-xl p-3 text-center">
                   <p className="text-xs text-slate-300">Set</p>
-                  <div className="mt-1 flex items-center justify-start gap-2">
+                  <div className="mt-1 flex items-center justify-center gap-2 text-center">
                     <ProductThumbnail
                       imageUrl={selectedCard.setLogoUrl ?? selectedCard.setSymbolUrl}
                       alt={selectedCard.setName || "Set"}
@@ -5518,13 +5536,13 @@ export function GemIndexApp() {
                     <p className="text-sm font-semibold text-slate-100">{selectedCard.setName || "Unknown Set"}</p>
                   </div>
                 </div>
-                <div className="section-panel rounded-xl p-3">
+                <div className="section-panel rounded-xl p-3 text-center">
                   <p className="text-xs text-slate-300">Raw Market Price</p>
                   <p className="text-sm font-semibold text-slate-100">
                     {investmentMetricsReady ? usd(selectedCard.rawPrice) : "Pending"}
                   </p>
                 </div>
-                <div className="section-panel rounded-xl p-3">
+                <div className="section-panel rounded-xl p-3 text-center">
                   <p className="text-xs text-slate-300">Gem Rate / Liquidity %</p>
                   <p className="text-sm font-semibold text-slate-100">
                     {investmentMetricsReady
@@ -5539,7 +5557,7 @@ export function GemIndexApp() {
                 </div>
               </div>
               <div className="grid gap-2 sm:grid-cols-3">
-                <div className="section-panel rounded-xl p-3">
+                <div className="section-panel rounded-xl p-3 text-center">
                   <p className="text-xs text-slate-300">PSA 10 / TAG 10</p>
                   <p className="text-sm font-semibold text-slate-100">
                     {investmentMetricsReady
@@ -5547,7 +5565,7 @@ export function GemIndexApp() {
                       : "Pending"}
                   </p>
                 </div>
-                <div className="section-panel rounded-xl p-3">
+                <div className="section-panel rounded-xl p-3 text-center">
                   <p className="text-xs text-slate-300">Scarcity / 12-Month ROI</p>
                   <p className="text-sm font-semibold text-slate-100">
                     {investmentMetricsReady
@@ -5560,7 +5578,7 @@ export function GemIndexApp() {
                     above 70 = tighter supply.
                   </p>
                 </div>
-                <div className="section-panel rounded-xl p-3">
+                <div className="section-panel rounded-xl p-3 text-center">
                   <p className="text-xs text-slate-300">Grading Arbitrage</p>
                   <p className={`text-sm font-semibold ${selectedCard.gradingArbitrageUsd >= 0 ? "text-emerald-200" : "text-rose-200"}`}>
                     {investmentMetricsReady ? usd(selectedCard.gradingArbitrageUsd) : "Pending"}
@@ -5716,23 +5734,23 @@ export function GemIndexApp() {
                   className="h-36 w-28 shrink-0"
                 />
                 <div className="flex-1 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                  <div className="section-panel rounded-xl p-3">
+                  <div className="section-panel rounded-xl p-3 text-center">
                     <p className="text-xs text-slate-300">Product</p>
                     <p className="text-sm font-semibold text-slate-100">{selectedSealedProduct.productName}</p>
                   </div>
-                  <div className="section-panel rounded-xl p-3">
+                  <div className="section-panel rounded-xl p-3 text-center">
                     <p className="text-xs text-slate-300">Set</p>
                     <p className="text-sm font-semibold text-slate-100">
                       {selectedSealedProduct.setName ?? setCodeLabel(selectedSealedProduct.setCode)}
                     </p>
                   </div>
-                  <div className="section-panel rounded-xl p-3">
+                  <div className="section-panel rounded-xl p-3 text-center">
                     <p className="text-xs text-slate-300">Product Type</p>
                     <p className="text-sm font-semibold text-slate-100">
                       {formatSealedProductType(selectedSealedProduct.productType)}
                     </p>
                   </div>
-                  <div className="section-panel rounded-xl p-3">
+                  <div className="section-panel rounded-xl p-3 text-center">
                     <p className="text-xs text-slate-300">Catalog Market Value</p>
                     <p className="text-sm font-semibold text-slate-100">
                       {usd(selectedSealedProduct.marketValueUsd)}
@@ -5745,7 +5763,7 @@ export function GemIndexApp() {
               <section className="section-panel rounded-xl p-3">
                 <h3 className="mb-3 text-sm font-semibold text-slate-200">Structured Product Details</h3>
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                  <div className="section-panel rounded-xl p-3">
+                  <div className="section-panel rounded-xl p-3 text-center">
                     <p className="text-xs text-slate-300">Release Date</p>
                     <p className="text-sm font-semibold text-slate-100">
                       {selectedSealedProduct.releaseDate
@@ -5753,19 +5771,19 @@ export function GemIndexApp() {
                         : "-"}
                     </p>
                   </div>
-                  <div className="section-panel rounded-xl p-3">
+                  <div className="section-panel rounded-xl p-3 text-center">
                     <p className="text-xs text-slate-300">UPC</p>
                     <p className="text-sm font-semibold text-slate-100">
                       {selectedSealedProduct.upc ?? "-"}
                     </p>
                   </div>
-                  <div className="section-panel rounded-xl p-3">
+                  <div className="section-panel rounded-xl p-3 text-center">
                     <p className="text-xs text-slate-300">Owned Quantity</p>
                     <p className="text-sm font-semibold text-slate-100">
                       x{selectedSealedProduct.inventoryQuantity}
                     </p>
                   </div>
-                  <div className="section-panel rounded-xl p-3">
+                  <div className="section-panel rounded-xl p-3 text-center">
                     <p className="text-xs text-slate-300">Wishlist Demand</p>
                     <p className="text-sm font-semibold text-slate-100">
                       {selectedSealedProduct.wishlistCount
@@ -5782,7 +5800,7 @@ export function GemIndexApp() {
               <section className="section-panel rounded-xl p-3">
                 <h3 className="mb-3 text-sm font-semibold text-slate-200">Sealed Investment Metrics</h3>
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  <div className="section-panel rounded-xl p-3">
+                  <div className="section-panel rounded-xl p-3 text-center">
                     <p className="text-xs text-slate-300">12-Month ROI</p>
                     <p className="text-sm font-semibold text-slate-100">
                       {formatPercent(selectedSealedProduct.metrics.roi12m)}
@@ -5791,7 +5809,7 @@ export function GemIndexApp() {
                       Return from the earliest recorded sealed sale in the current history window to the latest recorded sale.
                     </p>
                   </div>
-                  <div className="section-panel rounded-xl p-3">
+                  <div className="section-panel rounded-xl p-3 text-center">
                     <p className="text-xs text-slate-300">Volatility</p>
                     <p className="text-sm font-semibold text-slate-100">
                       {formatPercent(selectedSealedProduct.metrics.volatility)}
@@ -5800,7 +5818,7 @@ export function GemIndexApp() {
                       Measures how sharply monthly sealed sale prices move. Higher values indicate wider month-to-month swings.
                     </p>
                   </div>
-                  <div className="section-panel rounded-xl p-3">
+                  <div className="section-panel rounded-xl p-3 text-center">
                     <p className="text-xs text-slate-300">Liquidity %</p>
                     <p className="text-sm font-semibold text-slate-100">
                       {formatPercent(selectedSealedProduct.metrics.liquidityScore)}
@@ -6116,7 +6134,7 @@ export function GemIndexApp() {
             {selectedSealedSetHistory ? (
               <div className="mt-4 space-y-3">
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                  <div className="section-panel-deep rounded-xl p-3">
+                  <div className="section-panel-deep rounded-xl p-3 text-center">
                     <p className="text-[10px] capitalize tracking-wide text-slate-400">
                       Latest TCGplayer Listings
                     </p>
@@ -6127,7 +6145,7 @@ export function GemIndexApp() {
                       Current number of tracked sealed listings for this set.
                     </p>
                   </div>
-                  <div className="section-panel-deep rounded-xl p-3">
+                  <div className="section-panel-deep rounded-xl p-3 text-center">
                     <p className="text-[10px] capitalize tracking-wide text-slate-400">
                       Latest {selectedSealedMarketTypeLabel} Market Value
                     </p>
@@ -6138,7 +6156,7 @@ export function GemIndexApp() {
                       Current average {selectedSealedMarketTypeLabel.toLowerCase()} market value for this set.
                     </p>
                   </div>
-                  <div className="section-panel-deep rounded-xl p-3 md:col-span-2 xl:col-span-1">
+                  <div className="section-panel-deep rounded-xl p-3 text-center md:col-span-2 xl:col-span-1">
                     <p className="text-[10px] capitalize tracking-wide text-slate-400">
                       Why This Matters
                     </p>
@@ -6820,7 +6838,7 @@ export function GemIndexApp() {
               </div>
               <section className="section-panel rounded-xl p-3">
                 <h3 className="mb-2 text-sm font-semibold text-slate-200">Signal Definitions</h3>
-                <div className="grid gap-3 lg:grid-cols-3">
+                <div className="grid gap-3 md:grid-cols-2">
                   <div className="rounded-lg bg-white/[0.03] p-3 text-sm text-slate-200">
                     <p className="font-semibold text-emerald-100">Potentially Undervalued Cards</p>
                     <p className="mt-1">
@@ -6867,12 +6885,6 @@ export function GemIndexApp() {
             <p className="text-sm text-slate-300">Upgrade to Pro to track and analyze portfolios.</p>
           ) : (
             <>
-              <div className="section-panel-soft rounded-xl p-3">
-                <p className="text-sm text-slate-200">
-                  Manage multiple portfolios here, view each one independently, or switch to a total combined view. Performance is summarized at the top, with the portfolio holdings listed below.
-                </p>
-              </div>
-
               <section className="section-panel rounded-xl p-3">
                 <div className="grid gap-3 lg:grid-cols-[2fr]">
                   <label className="space-y-1">
@@ -6907,15 +6919,8 @@ export function GemIndexApp() {
                 ))}
               </div>
 
-              <div className="section-panel rounded-xl p-3 text-sm text-slate-200">
-                Market comparison: the broad card benchmark is {benchmarkRoi >= 0 ? "up" : "down"} {formatPercent(Math.abs(benchmarkRoi))} over the current 12-month view.
-              </div>
-
               <section className="section-panel rounded-xl p-3">
                 <h3 className="mb-2 text-sm font-semibold text-slate-200">Portfolio Value Over Time</h3>
-                <p className="mb-3 text-xs text-slate-300">
-                  This chart reflects the current {selectedPortfolioView === "ALL" ? "cumulative" : "portfolio-specific"} view for raw cards, graded cards, and sealed items combined.
-                </p>
                 <MultiSeriesChart
                   labels={portfolioTrendLabels.map((date) => date.slice(0, 7))}
                   series={portfolioChartSeries}
@@ -8212,7 +8217,14 @@ export function GemIndexApp() {
 
   return (
     <main className="mx-auto flex max-w-7xl flex-col gap-4 p-4 sm:p-8">
-      <section className="relative z-40 overflow-visible rounded-3xl border border-white/10 bg-transparent px-3 py-1 sm:px-4 sm:py-1.5">
+      <section
+        className={`relative z-40 overflow-visible rounded-3xl border border-white/10 px-3 py-1 sm:px-4 sm:py-1.5 ${
+          signedInHeaderBackgroundStyle
+            ? "bg-slate-950/15"
+            : "bg-[radial-gradient(circle_at_18%_20%,rgba(214,96,198,0.14),transparent_24%),radial-gradient(circle_at_82%_18%,rgba(52,178,255,0.16),transparent_28%),linear-gradient(150deg,#182f61_0%,#0f2551_45%,#0b1f45_100%)]"
+        }`}
+        style={signedInHeaderBackgroundStyle}
+      >
         <div className="relative z-10">
           <div className="relative flex items-center justify-center pt-6 sm:pt-7">
             <div className="flex w-full min-w-0 items-center justify-center px-2 sm:px-6">

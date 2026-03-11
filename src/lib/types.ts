@@ -371,6 +371,7 @@ export interface SetMetrics {
   setId: string;
   code: string;
   name: string;
+  imageUrl?: string;
   releaseDate: string;
   cardCount: number;
   totalSetValue: number;
