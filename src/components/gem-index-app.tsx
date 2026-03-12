@@ -158,16 +158,6 @@ type PokemonProductGalleryResponse = {
   types: PokemonGalleryTypeApi[];
 };
 
-type HeaderBackgroundId =
-  | "INVESTIGE_BRAND"
-  | "DEFAULT"
-  | "BULBASAUR_FOREST"
-  | "GRENINJA_TIDE"
-  | "MEW_NEON"
-  | "MEWTWO_COSMIC"
-  | "PIKACHU_GROVE"
-  | "UMBREON_ALLEY";
-
 type PortfolioApi = {
   id: string;
   name: string;
@@ -402,15 +392,14 @@ const MARKET_RESEARCH_HOME_TABS: Array<{ id: HomeTab; label: string }> = [
 const PORTFOLIO_HOME_TABS: Array<{ id: HomeTab; label: string }> = [
   { id: "PERSONAL_COLLECTION", label: "Portfolio Overview" },
   { id: "WISHLIST", label: "Wishlist" },
-  { id: "SEALED_INVENTORY", label: "Sealed Collection" },
+  { id: "QUICK_PORTFOLIO_ACTIONS", label: "Add to Portfolio" },
 ];
 
 const SETTINGS_HOME_TABS: Array<{
   label: string;
-  subsection: "ACCOUNT" | "HEADER_BACKGROUND" | "DATA_SOURCES" | "BILLING_INFORMATION" | "ALERTS";
+  subsection: "ACCOUNT" | "DATA_SOURCES" | "BILLING_INFORMATION" | "ALERTS";
 }> = [
   { label: "Account", subsection: "ACCOUNT" },
-  { label: "Header Background", subsection: "HEADER_BACKGROUND" },
   { label: "Data Sources", subsection: "DATA_SOURCES" },
   { label: "Billing Information", subsection: "BILLING_INFORMATION" },
   { label: "Alerts", subsection: "ALERTS" },
@@ -422,62 +411,6 @@ const PRIMARY_HOME_TABS: Array<{ id: HomeTab; label: string }> = [
 ];
 
 const INVESTIGE_LOGO_SRC = "/investige-logo-cropped-v20260311a.png";
-const HEADER_BACKGROUND_STORAGE_KEY = "gemindex.headerBackgroundId.v4";
-
-const HEADER_BACKGROUND_OPTIONS: Array<{
-  id: HeaderBackgroundId;
-  label: string;
-  description: string;
-  imageUrl?: string;
-}> = [
-  {
-    id: "INVESTIGE_BRAND",
-    label: "Investige Brand",
-    description: "Primary Investige branded header image.",
-    imageUrl: INVESTIGE_LOGO_SRC,
-  },
-  {
-    id: "DEFAULT",
-    label: "Default Glow",
-    description: "Uses the built-in Investige gradient shell.",
-  },
-  {
-    id: "BULBASAUR_FOREST",
-    label: "Bulbasaur Forest",
-    description: "Bulbasaur header artwork.",
-    imageUrl: "/header-backgrounds/Bulbasaur_Background_cropped.webp",
-  },
-  {
-    id: "GRENINJA_TIDE",
-    label: "Greninja Tide",
-    description: "Greninja header artwork.",
-    imageUrl: "/header-backgrounds/Greninja_Background_cropped.jpg",
-  },
-  {
-    id: "MEW_NEON",
-    label: "Mew Neon",
-    description: "Mew header artwork.",
-    imageUrl: "/header-backgrounds/Mew_Background_cropped.jpg",
-  },
-  {
-    id: "MEWTWO_COSMIC",
-    label: "Mewtwo Cosmic",
-    description: "Mewtwo header artwork.",
-    imageUrl: "/header-backgrounds/Mewtwo_Background_cropped.jpeg",
-  },
-  {
-    id: "PIKACHU_GROVE",
-    label: "Pikachu Grove",
-    description: "Pikachu header artwork.",
-    imageUrl: "/header-backgrounds/Pikachu_Background_cropped.webp",
-  },
-  {
-    id: "UMBREON_ALLEY",
-    label: "Umbreon Alley",
-    description: "Umbreon header artwork.",
-    imageUrl: "/header-backgrounds/Umbreon_Background_cropped.jpg",
-  },
-];
 
 const SEALED_MARKET_TYPE_OPTIONS: Array<{ value: SealedMarketTypeFilter; label: string }> = [
   { value: "BOOSTER_BOX", label: "Booster Box" },
@@ -779,11 +712,13 @@ function ProductThumbnail({
   alt,
   fallback,
   className = "h-16 w-12",
+  imageClassName = "h-full w-full object-cover",
 }: {
   imageUrl?: string;
   alt: string;
   fallback: string;
   className?: string;
+  imageClassName?: string;
 }) {
   const fallbackText = fallback
     .split(/\s+/)
@@ -800,7 +735,7 @@ function ProductThumbnail({
       {imageUrl ? (
         // Remote art comes from multiple providers, so this stays as a plain img.
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={imageUrl} alt={alt} className="h-full w-full object-cover" loading="lazy" />
+        <img src={imageUrl} alt={alt} className={imageClassName} loading="lazy" />
       ) : (
         <div className="flex h-full w-full items-center justify-center px-1 text-center text-xs font-semibold text-slate-100">
           {fallbackText || "GI"}
@@ -846,6 +781,27 @@ function SealedCell({
     <span className="flex w-full items-center justify-start gap-3 text-left">
       <ProductThumbnail imageUrl={imageUrl} alt={name} fallback={name} className="h-14 w-10 shrink-0" />
       <span>{name}</span>
+    </span>
+  );
+}
+
+function SetCell({
+  imageUrl,
+  name,
+}: {
+  imageUrl?: string;
+  name: string;
+}) {
+  return (
+    <span className="flex w-full items-center justify-start gap-3 text-left">
+      <ProductThumbnail
+        imageUrl={imageUrl}
+        alt={name}
+        fallback={name}
+        className="flex h-16 w-28 shrink-0 items-center justify-center p-1.5"
+        imageClassName="h-full w-full object-contain"
+      />
+      <span className="min-w-0">{name}</span>
     </span>
   );
 }
@@ -939,6 +895,59 @@ function ExplainableMetricCard({
           </div>
         </div>
       ) : null}
+    </button>
+  );
+}
+
+type PortfolioSeriesKey = "raw" | "graded" | "sealed" | "total";
+
+function PortfolioFilterMetricCard({
+  title,
+  value,
+  status,
+  context,
+  summary,
+  isActive,
+  onClick,
+}: {
+  title: string;
+  value: string;
+  status: string;
+  context: string;
+  summary: string;
+  isActive: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-xl p-3 text-center transition ${
+        isActive
+          ? "bg-cyan-500/12 ring-1 ring-cyan-300/35"
+          : "bg-white/[0.035] hover:bg-white/[0.05]"
+      }`}
+    >
+      <div className="flex w-full flex-col items-center gap-2 text-center">
+        <div className="flex w-full flex-col items-center text-center">
+          <span className="group/title relative inline-flex max-w-full justify-center text-center">
+            <span className="text-center text-xs text-slate-300 underline decoration-dotted underline-offset-3">
+              {title}
+            </span>
+            <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden w-64 -translate-x-1/2 rounded-lg border border-white/10 bg-slate-950/95 px-3 py-2 text-[11px] normal-case text-slate-100 shadow-lg shadow-black/35 group-hover/title:block">
+              {summary}
+            </span>
+          </span>
+          <p className="mt-1 text-center text-lg font-semibold text-slate-100">{value}</p>
+        </div>
+        <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-center text-[10px] font-semibold capitalize tracking-wide text-slate-200">
+          {status}
+        </span>
+      </div>
+      <p className="mt-2 text-center text-xs text-cyan-100">{context}</p>
+      <p className="mt-2 text-[11px] capitalize tracking-wide text-slate-400">
+        {isActive ? "Chart Filter Active" : "Click To Filter Chart"}
+      </p>
     </button>
   );
 }
@@ -2485,9 +2494,13 @@ export function GemIndexApp() {
   const [selectedSetRatioSetId, setSelectedSetRatioSetId] = useState("");
   const [setRatioHistoryRange, setSetRatioHistoryRange] = useState<ChartRangeOption>("12M");
   const [cardSearch] = useState("");
-  const [headerBackgroundId, setHeaderBackgroundId] = useState<HeaderBackgroundId>("INVESTIGE_BRAND");
+  const [portfolioVisibleSeries, setPortfolioVisibleSeries] = useState<PortfolioSeriesKey[]>([
+    "raw",
+    "graded",
+    "sealed",
+  ]);
   const [settingsSubsection, setSettingsSubsection] = useState<
-    "ACCOUNT" | "HEADER_BACKGROUND" | "DATA_SOURCES" | "BILLING_INFORMATION" | "ALERTS"
+    "ACCOUNT" | "DATA_SOURCES" | "BILLING_INFORMATION" | "ALERTS"
   >("ACCOUNT");
   const [psaPopulationUrl, setPsaPopulationUrl] = useState("");
   const [tagPopulationUrl, setTagPopulationUrl] = useState("");
@@ -2511,22 +2524,6 @@ export function GemIndexApp() {
   const [cardAlertThreshold, setCardAlertThreshold] = useState("");
   const [cardAlertLookback, setCardAlertLookback] = useState("3");
   const [cardAlertBusy, setCardAlertBusy] = useState(false);
-
-  useEffect(() => {
-    const stored = window.localStorage.getItem(HEADER_BACKGROUND_STORAGE_KEY);
-    if (!stored) {
-      return;
-    }
-
-    const selected = HEADER_BACKGROUND_OPTIONS.find((option) => option.id === stored);
-    if (selected) {
-      setHeaderBackgroundId(selected.id);
-    }
-  }, []);
-
-  useEffect(() => {
-    window.localStorage.setItem(HEADER_BACKGROUND_STORAGE_KEY, headerBackgroundId);
-  }, [headerBackgroundId]);
 
   useEffect(() => {
     if (!user) {
@@ -2624,7 +2621,7 @@ export function GemIndexApp() {
     }
   }
 
-  function openSettingsSubsection(subsection: "ACCOUNT" | "HEADER_BACKGROUND" | "DATA_SOURCES" | "BILLING_INFORMATION" | "ALERTS") {
+  function openSettingsSubsection(subsection: "ACCOUNT" | "DATA_SOURCES" | "BILLING_INFORMATION" | "ALERTS") {
     setSettingsSubsection(subsection);
     setActiveTab("SETTINGS");
   }
@@ -3633,17 +3630,6 @@ export function GemIndexApp() {
     await refresh(true);
   }
 
-  const selectedHeaderBackground = HEADER_BACKGROUND_OPTIONS.find((option) => option.id === headerBackgroundId);
-  const signedInHeaderBackgroundStyle =
-    selectedHeaderBackground?.id && selectedHeaderBackground.id !== "DEFAULT" && selectedHeaderBackground.imageUrl
-      ? {
-          backgroundImage: `linear-gradient(180deg, rgba(4, 10, 24, 0.22), rgba(4, 10, 24, 0.34)), url(${selectedHeaderBackground.imageUrl})`,
-          backgroundPosition: "center center",
-          backgroundRepeat: "no-repeat",
-          backgroundSize: "cover",
-        }
-      : undefined;
-
   if (loading) return <main className="p-8">Loading Investige...</main>;
 
   if (!user) {
@@ -4447,7 +4433,7 @@ export function GemIndexApp() {
   );
   const quickPortfolioActionsPanel = (
     <section className="section-panel rounded-xl p-3">
-      <h3 className="mb-2 text-sm font-semibold text-slate-200">Search and Add to Portfolio</h3>
+      <h3 className="mb-2 text-sm font-semibold text-slate-200">Add to Portfolio</h3>
       <p className="mb-3 text-sm text-slate-300">
         Search for a card or sealed product and add it directly to one of your portfolios.
       </p>
@@ -5125,7 +5111,8 @@ export function GemIndexApp() {
         "Adds your current card collection value and sealed collection value into one total portfolio number.",
     },
   ];
-  const collectionSeriesByDate = new Map<string, number>();
+  const rawCollectionSeriesByDate = new Map<string, number>();
+  const gradedCollectionSeriesByDate = new Map<string, number>();
   portfolioScopedCollection.forEach((item) => {
     const metric = metricForCardRef(item.card);
     if (!metric) {
@@ -5145,35 +5132,64 @@ export function GemIndexApp() {
         return;
       }
 
-      collectionSeriesByDate.set(
-        point.date,
-        (collectionSeriesByDate.get(point.date) ?? 0) + unitPrice * item.quantity,
-      );
+      const targetSeries = item.ownershipType === "GRADED" ? gradedCollectionSeriesByDate : rawCollectionSeriesByDate;
+      targetSeries.set(point.date, (targetSeries.get(point.date) ?? 0) + unitPrice * item.quantity);
     });
   });
   const portfolioTrendLabels = [
     ...new Set([
-      ...collectionSeriesByDate.keys(),
-      ...(collectionSeriesByDate.size === 0 ? indexSeries.map((point) => point.date) : []),
+      ...rawCollectionSeriesByDate.keys(),
+      ...gradedCollectionSeriesByDate.keys(),
+      ...((rawCollectionSeriesByDate.size === 0 && gradedCollectionSeriesByDate.size === 0)
+        ? indexSeries.map((point) => point.date)
+        : []),
     ]),
   ].sort();
-  const portfolioChartSeries = [
+  const portfolioSeriesDefinitions: Array<{
+    key: PortfolioSeriesKey;
+    cardId: string;
+    label: string;
+    color: string;
+    values: number[];
+  }> = [
     {
-      label: "Collection Value",
+      key: "raw",
+      cardId: "portfolio-raw-cards",
+      label: "Raw Collection Value",
       color: "#60a5fa",
-      values: portfolioTrendLabels.map((date) => collectionSeriesByDate.get(date) ?? 0),
+      values: portfolioTrendLabels.map((date) => rawCollectionSeriesByDate.get(date) ?? 0),
     },
     {
+      key: "graded",
+      cardId: "portfolio-graded-cards",
+      label: "Graded Collection Value",
+      color: "#a78bfa",
+      values: portfolioTrendLabels.map((date) => gradedCollectionSeriesByDate.get(date) ?? 0),
+    },
+    {
+      key: "sealed",
+      cardId: "portfolio-sealed",
       label: "Sealed Value",
       color: "#f59e0b",
       values: portfolioTrendLabels.map(() => sealedMarketValue),
     },
     {
-      label: "Portfolio Value",
+      key: "total",
+      cardId: "portfolio-total",
+      label: "Total Portfolio Value",
       color: "#34d399",
-      values: portfolioTrendLabels.map((date) => (collectionSeriesByDate.get(date) ?? 0) + sealedMarketValue),
+      values: portfolioTrendLabels.map(
+        (date) =>
+          (rawCollectionSeriesByDate.get(date) ?? 0) +
+          (gradedCollectionSeriesByDate.get(date) ?? 0) +
+          sealedMarketValue,
+      ),
     },
   ];
+  const activePortfolioVisibleSeries = portfolioVisibleSeries.length ? portfolioVisibleSeries : ["raw", "graded", "sealed"];
+  const portfolioChartSeries = portfolioSeriesDefinitions
+    .filter((entry) => activePortfolioVisibleSeries.includes(entry.key))
+    .map(({ label, color, values }) => ({ label, color, values }));
 
   const renderActiveTab = () => {
     if (activeTab === "ANALYTICS_DASHBOARD") {
@@ -5470,7 +5486,7 @@ export function GemIndexApp() {
                       value: (set) => set.name,
                       align: "left",
                       cellClassName: "justify-start",
-                      render: (set) => <SealedCell imageUrl={set.imageUrl} name={set.name} />,
+                      render: (set) => <SetCell imageUrl={set.imageUrl} name={set.name} />,
                     },
                     {
                       key: "totalSetValue",
@@ -6873,10 +6889,19 @@ export function GemIndexApp() {
       );
     }
 
+    if (activeTab === "QUICK_PORTFOLIO_ACTIONS") {
+      return (
+        <div className="space-y-4">
+          <h2 className="text-xl font-semibold text-slate-100">Add to Portfolio</h2>
+          {quickPortfolioActionsPanel}
+        </div>
+      );
+    }
+
     if (
       activeTab === "PORTFOLIO_PERFORMANCE" ||
       activeTab === "PERSONAL_COLLECTION" ||
-      activeTab === "QUICK_PORTFOLIO_ACTIONS"
+      activeTab === "SEALED_INVENTORY"
     ) {
       return (
         <div className="space-y-4">
@@ -6910,17 +6935,61 @@ export function GemIndexApp() {
 
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 {portfolioCards.map((card) => (
-                  <ExplainableMetricCard
+                  <PortfolioFilterMetricCard
                     key={card.id}
                     {...card}
-                    expandedId={expandedDashboardKpi}
-                    onToggle={setExpandedDashboardKpi}
+                    isActive={
+                      portfolioSeriesDefinitions.find((entry) => entry.cardId === card.id)?.key
+                        ? activePortfolioVisibleSeries.length === 1 &&
+                          activePortfolioVisibleSeries[0] ===
+                            portfolioSeriesDefinitions.find((entry) => entry.cardId === card.id)?.key
+                        : false
+                    }
+                    onClick={() => {
+                      const matchedSeries = portfolioSeriesDefinitions.find((entry) => entry.cardId === card.id);
+                      if (!matchedSeries) {
+                        return;
+                      }
+                      setPortfolioVisibleSeries((current) =>
+                        current.length === 1 && current[0] === matchedSeries.key
+                          ? ["raw", "graded", "sealed"]
+                          : [matchedSeries.key],
+                      );
+                    }}
                   />
                 ))}
               </div>
 
               <section className="section-panel rounded-xl p-3">
-                <h3 className="mb-2 text-sm font-semibold text-slate-200">Portfolio Value Over Time</h3>
+                <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <h3 className="text-sm font-semibold text-slate-200">Portfolio Value Over Time</h3>
+                  <div className="flex flex-wrap justify-center gap-2 sm:justify-end">
+                    {portfolioSeriesDefinitions.map((entry) => {
+                      const active = activePortfolioVisibleSeries.includes(entry.key);
+                      return (
+                        <button
+                          key={entry.key}
+                          type="button"
+                          onClick={() =>
+                            setPortfolioVisibleSeries((current) => {
+                              const next = current.includes(entry.key)
+                                ? current.filter((key) => key !== entry.key)
+                                : [...current, entry.key];
+                              return next.length ? next : [entry.key];
+                            })
+                          }
+                          className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition ${
+                            active
+                              ? "border-cyan-300/40 bg-cyan-500/18 text-cyan-100"
+                              : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]"
+                          }`}
+                        >
+                          {entry.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
                 <MultiSeriesChart
                   labels={portfolioTrendLabels.map((date) => date.slice(0, 7))}
                   series={portfolioChartSeries}
@@ -7069,8 +7138,6 @@ export function GemIndexApp() {
                 )}
               </section>
 
-              {quickPortfolioActionsPanel}
-
               <section className="section-panel rounded-xl p-3">
                 <h3 className="mb-2 text-sm font-semibold text-slate-200">Create New Portfolio</h3>
                 <div className="grid gap-3 lg:grid-cols-[2fr_auto]">
@@ -7106,8 +7173,6 @@ export function GemIndexApp() {
             <p className="text-sm text-slate-300">Upgrade to Pro to track wishlist items.</p>
           ) : (
             <div className="space-y-4">
-              {quickPortfolioActionsPanel}
-
               <section className="section-panel rounded-xl p-3">
                 <h3 className="mb-2 text-sm font-semibold text-slate-200">Card Wishlist</h3>
                 <AnalyticsDataTable
@@ -7227,82 +7292,6 @@ export function GemIndexApp() {
       );
     }
 
-    if (activeTab === "SEALED_INVENTORY") {
-      return (
-        <div className="space-y-3">
-          <h2 className="text-xl font-semibold text-slate-100">Sealed Collection</h2>
-          {!can("PORTFOLIO_TRACKING") ? (
-            <p className="text-sm text-slate-300">Upgrade to Pro to track sealed inventory.</p>
-          ) : (
-            <AnalyticsDataTable
-              rows={sealed}
-              getRowId={(item) => item.id}
-              gridClassName="grid-cols-[2fr_0.9fr_1fr_1fr_auto]"
-              emptyMessage="No sealed inventory yet."
-              expandableColumnKey="actions"
-              renderExpandedRow={(item) => (
-                <SealedCollectionEditor
-                  item={item}
-                  onSave={(changes) => saveSealedCollectionItem(item.id, changes)}
-                  onRemove={() => removeSealedCollectionItem(item.id)}
-                />
-              )}
-              columns={[
-                {
-                  key: "productName",
-                  label: "Product",
-                  value: (item) => `${item.productName} ${item.setCode} ${item.setName ?? ""}`,
-                  render: (item) => (
-                    <span className="flex w-full items-center justify-start gap-3 text-left">
-                      <ProductThumbnail
-                        imageUrl={item.imageUrl ?? item.setLogoUrl ?? item.setSymbolUrl}
-                        alt={item.productName}
-                        fallback={item.productName}
-                        className="h-14 w-10 shrink-0"
-                      />
-                      <span>
-                        {item.productName} ({setCodeLabel(item.setCode)})
-                      </span>
-                    </span>
-                  ),
-                },
-                {
-                  key: "quantity",
-                  label: "Quantity",
-                  value: (item) => item.quantity,
-                  render: (item) => `x${item.quantity}`,
-                },
-                {
-                  key: "acquisitionPriceUsd",
-                  label: "Paid Price",
-                  value: (item) => item.acquisitionPriceUsd ?? 0,
-                  render: (item) => usd(item.acquisitionPriceUsd),
-                },
-                {
-                  key: "estimatedValueUsd",
-                  label: "Est. Value",
-                  value: (item) => item.estimatedValueUsd ?? item.marketValueUsd ?? 0,
-                  render: (item) => usd(item.estimatedValueUsd ?? item.marketValueUsd),
-                },
-                {
-                  key: "actions",
-                  label: "Actions",
-                  value: () => "",
-                  sortable: false,
-                  filterable: false,
-                  render: () => (
-                    <span className="inline-flex rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-[11px] font-semibold capitalize tracking-wide text-slate-200">
-                      Manage
-                    </span>
-                  ),
-                },
-              ]}
-            />
-          )}
-        </div>
-      );
-    }
-
     return (
       <div className="space-y-4">
         <h2 className="text-xl font-semibold text-slate-100">Settings</h2>
@@ -7310,32 +7299,6 @@ export function GemIndexApp() {
           Cards: {dashboard?.totalTrackedCards ?? 0} | Sets: {dashboard?.totalSets ?? 0} | Sales:{" "}
           {sync?.totals.sales.toLocaleString() ?? 0}
         </div>
-        <section className="section-panel rounded-xl p-3">
-          <p className="text-sm font-semibold text-slate-100">Settings Sections</p>
-          <div className="mt-3 grid gap-2 md:grid-cols-5">
-            {[
-              { id: "ACCOUNT" as const, label: "Account" },
-              { id: "HEADER_BACKGROUND" as const, label: "Header Background" },
-              { id: "DATA_SOURCES" as const, label: "Data Sources" },
-              { id: "BILLING_INFORMATION" as const, label: "Billing Information" },
-              { id: "ALERTS" as const, label: "Alerts" },
-            ].map((section) => (
-              <button
-                key={section.id}
-                type="button"
-                onClick={() => setSettingsSubsection(section.id)}
-                className={`rounded-xl border px-3 py-2 text-sm font-semibold transition ${
-                  settingsSubsection === section.id
-                    ? "border-cyan-300/40 bg-cyan-500/10 text-cyan-100"
-                    : "border-white/10 bg-white/[0.03] text-slate-200 hover:bg-white/[0.05]"
-                }`}
-              >
-                {section.label}
-              </button>
-            ))}
-          </div>
-        </section>
-
         {settingsSubsection === "ACCOUNT" ? (
           <section className="section-panel rounded-xl p-3">
             <h3 className="font-semibold">Account</h3>
@@ -7428,51 +7391,6 @@ export function GemIndexApp() {
                 {accountBusy ? "Saving..." : "Save Account Changes"}
               </button>
             </form>
-          </section>
-        ) : null}
-
-        {settingsSubsection === "HEADER_BACKGROUND" ? (
-          <section className="section-panel rounded-xl p-3">
-            <h3 className="font-semibold">Header Background</h3>
-            <p className="mt-1 text-sm text-slate-300">
-              Choose the banner image that appears behind the title, logo, and search bar in the signed-in header.
-            </p>
-            <p className="mt-1 text-xs text-slate-400">
-              Recommended banner size for new options: 1600 x 500. Keep the center area visually cleaner so the title and search bar stay readable.
-            </p>
-            <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              {HEADER_BACKGROUND_OPTIONS.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  onClick={() => setHeaderBackgroundId(option.id)}
-                  className={`rounded-xl border p-2 text-left transition ${
-                    headerBackgroundId === option.id
-                      ? "border-cyan-300/40 bg-cyan-500/10"
-                      : "border-white/10 bg-white/[0.03] hover:bg-white/[0.05]"
-                  }`}
-                >
-                  <div
-                    className={`h-24 rounded-lg ${
-                      option.id === "DEFAULT"
-                        ? "bg-[linear-gradient(160deg,#182f61_0%,#0f2551_45%,#0b1f45_100%)]"
-                        : "bg-slate-950"
-                    }`}
-                  >
-                    {option.imageUrl ? (
-                      <div
-                        className="h-full w-full rounded-lg bg-cover bg-top bg-no-repeat"
-                        style={{ backgroundImage: `url(${option.imageUrl})`, backgroundPosition: "center top" }}
-                      />
-                    ) : (
-                      <div className="h-full w-full rounded-lg bg-[radial-gradient(circle_at_16%_22%,rgba(214,96,198,0.24),transparent_24%),radial-gradient(circle_at_80%_18%,rgba(52,178,255,0.28),transparent_28%)]" />
-                    )}
-                  </div>
-                  <p className="mt-2 text-sm font-semibold text-slate-100">{option.label}</p>
-                  <p className="mt-1 text-xs text-slate-400">{option.description}</p>
-                </button>
-              ))}
-            </div>
           </section>
         ) : null}
 
@@ -8217,14 +8135,7 @@ export function GemIndexApp() {
 
   return (
     <main className="mx-auto flex max-w-7xl flex-col gap-4 p-4 sm:p-8">
-      <section
-        className={`relative z-40 overflow-visible rounded-3xl border border-white/10 px-3 py-1 sm:px-4 sm:py-1.5 ${
-          signedInHeaderBackgroundStyle
-            ? "bg-slate-950/15"
-            : "bg-[radial-gradient(circle_at_18%_20%,rgba(214,96,198,0.14),transparent_24%),radial-gradient(circle_at_82%_18%,rgba(52,178,255,0.16),transparent_28%),linear-gradient(150deg,#182f61_0%,#0f2551_45%,#0b1f45_100%)]"
-        }`}
-        style={signedInHeaderBackgroundStyle}
-      >
+      <section className="relative z-40 overflow-visible rounded-3xl border border-white/10 bg-[radial-gradient(circle_at_18%_20%,rgba(214,96,198,0.14),transparent_24%),radial-gradient(circle_at_82%_18%,rgba(52,178,255,0.16),transparent_28%),linear-gradient(150deg,#182f61_0%,#0f2551_45%,#0b1f45_100%)] px-3 py-1 sm:px-4 sm:py-1.5">
         <div className="relative z-10">
           <div className="relative flex items-center justify-center pt-6 sm:pt-7">
             <div className="flex w-full min-w-0 items-center justify-center px-2 sm:px-6">
