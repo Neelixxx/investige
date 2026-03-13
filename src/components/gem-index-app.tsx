@@ -991,6 +991,7 @@ function AnalyticsDataTable<T>({
   gridClassName,
   maxHeightClassName = "max-h-[30rem]",
   expandableColumnKey,
+  expandableHintText = "Details",
   renderExpandedRow,
   controlMode = "singleFilterHeaderSort",
 }: {
@@ -1001,6 +1002,7 @@ function AnalyticsDataTable<T>({
   gridClassName: string;
   maxHeightClassName?: string;
   expandableColumnKey?: string;
+  expandableHintText?: string | null;
   renderExpandedRow?: (row: T) => ReactNode;
   controlMode?: "default" | "singleFilterHeaderSort";
 }) {
@@ -1220,9 +1222,11 @@ function AnalyticsDataTable<T>({
                         >
                           <span className="inline-flex items-center gap-2">
                             <span>{content}</span>
-                            <span className="mt-0.5 text-[10px] capitalize tracking-wide text-slate-400">
-                              {isExpanded ? "Hide" : "Details"}
-                            </span>
+                            {expandableHintText ? (
+                              <span className="mt-0.5 text-[10px] capitalize tracking-wide text-slate-400">
+                                {isExpanded ? "Hide" : expandableHintText}
+                              </span>
+                            ) : null}
                           </span>
                         </button>
                       );
@@ -2494,6 +2498,8 @@ export function GemIndexApp() {
   const [selectedSetRatioSetId, setSelectedSetRatioSetId] = useState("");
   const [setRatioHistoryRange, setSetRatioHistoryRange] = useState<ChartRangeOption>("12M");
   const [cardSearch] = useState("");
+  const [cardAnalyticsSearch, setCardAnalyticsSearch] = useState("");
+  const [sealedAnalyticsSearch, setSealedAnalyticsSearch] = useState("");
   const [portfolioVisibleSeries, setPortfolioVisibleSeries] = useState<PortfolioSeriesKey[]>([
     "raw",
     "graded",
@@ -3923,18 +3929,19 @@ export function GemIndexApp() {
 
   const investmentMetricsReady = dataQuality?.investmentMetricsReady ?? false;
   const query = normalizeSearchText(cardSearch);
-  const matchingCards = query
+  const cardAnalyticsQuery = normalizeSearchText(cardAnalyticsSearch || cardSearch);
+  const matchingCards = cardAnalyticsQuery
     ? cards
         .map((card) => ({
           card,
-          score: relevanceScore(query, `${card.cardName} ${card.cardNumber} ${card.setCode}`),
+          score: relevanceScore(cardAnalyticsQuery, `${card.cardName} ${card.cardNumber} ${card.setCode} ${card.setName}`),
         }))
         .filter((entry) => entry.score >= 0)
         .sort((a, b) => b.score - a.score || b.card.rawPrice - a.card.rawPrice)
         .slice(0, 30)
         .map((entry) => entry.card)
     : cards.slice(0, 30);
-  const selectedCard = query
+  const selectedCard = cardAnalyticsQuery
     ? cards.find((card) => card.cardId === quickCardId) ?? matchingCards[0] ?? null
     : cards.find((card) => card.cardId === quickCardId) ?? matchingCards[0] ?? cards[0] ?? null;
   const setRows = query
@@ -4187,6 +4194,14 @@ export function GemIndexApp() {
   const recentIndexRows = indexSeries.slice(-12).reverse();
   const topUndervaluedAlerts = dashboard?.topUndervalued ?? [];
   const flipperSignalAlerts = dashboard?.flipperSignals ?? [];
+  const flipperMomentumLeaders = flipperSignalAlerts
+    .slice()
+    .sort((a, b) => (b.momentum4mPct ?? 0) - (a.momentum4mPct ?? 0))
+    .slice(0, 12);
+  const flipperLiquidityLeaders = flipperSignalAlerts
+    .slice()
+    .sort((a, b) => (b.liquidityScore ?? 0) - (a.liquidityScore ?? 0))
+    .slice(0, 12);
   const totalRawUniverse = cards.reduce((sum, card) => sum + Math.max(card.rawPrice, 0), 0) || 1;
   const selectedCardChartLabels = selectedCard?.series.map((point) => point.date.slice(0, 7)) ?? [];
   const selectedCardChartSeries = selectedCard
@@ -4325,6 +4340,7 @@ export function GemIndexApp() {
     map.set(productId, existing);
     return map;
   }, new Map());
+  const sealedAnalyticsQuery = normalizeSearchText(sealedAnalyticsSearch || cardSearch);
   const allSealedProductMatches: SealedSearchMatch[] = sealedProducts
     .map((product) => {
       const inventory = sealedInventoryByProductId.get(product.id);
@@ -4354,9 +4370,9 @@ export function GemIndexApp() {
         metrics: product.metrics,
         meta: metaParts.join(" | "),
         valueLabel: usd(trackedValueUsd),
-        score: query
+        score: sealedAnalyticsQuery
           ? relevanceScore(
-              query,
+              sealedAnalyticsQuery,
               `${product.productName} ${product.setCode} ${product.setName} ${formatSealedProductType(product.productType)}`,
             )
           : 0,
@@ -4369,7 +4385,7 @@ export function GemIndexApp() {
         upc: product.upc,
       };
     })
-    .filter((item) => (query ? item.score >= 0 : true))
+    .filter((item) => (sealedAnalyticsQuery ? item.score >= 0 : true))
     .sort(
       (a, b) =>
         b.score - a.score ||
@@ -4815,6 +4831,7 @@ export function GemIndexApp() {
   });
   const sealedPositionRows = portfolioScopedSealed.map((item) => ({
     id: item.id,
+    productId: item.productId ?? item.product?.id ?? "",
     portfolioName: item.portfolioName ?? "Main Portfolio",
     label: item.setName ?? setCodeLabel(item.setCode),
     imageUrl: item.imageUrl ?? item.product?.imageUrl ?? item.setLogoUrl ?? item.setSymbolUrl,
@@ -5517,7 +5534,21 @@ export function GemIndexApp() {
     if (activeTab === "CARD_DETAILS") {
       return (
         <div className="space-y-4">
-          <h2 className="text-xl font-semibold text-slate-100">Card Analytics</h2>
+          <div className="flex flex-col items-center justify-center gap-3 md:flex-row md:items-center">
+            <h2 className="text-xl font-semibold text-slate-100">Card Analytics</h2>
+            <div className="w-full md:max-w-xl">
+              <input
+                type="text"
+                value={cardAnalyticsSearch}
+                onChange={(event) => {
+                  setCardAnalyticsSearch(event.target.value);
+                  setQuickCardId("");
+                }}
+                placeholder="Search.."
+                className="w-full rounded-full border border-white/15 bg-slate-950/75 px-4 py-2.5 text-center text-sm text-slate-100 placeholder:text-slate-400 outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-400/20"
+              />
+            </div>
+          </div>
           {selectedCard ? (
             <>
               {!investmentMetricsReady ? (
@@ -5729,7 +5760,21 @@ export function GemIndexApp() {
     if (activeTab === "SEALED_PRODUCT_DETAILS" || activeTab === "SEALED_ANALYTICS") {
       return (
         <div className="space-y-4">
-          <h2 className="text-xl font-semibold text-slate-100">Sealed Analytics</h2>
+          <div className="flex flex-col items-center justify-center gap-3 md:flex-row md:items-center">
+            <h2 className="text-xl font-semibold text-slate-100">Sealed Analytics</h2>
+            <div className="w-full md:max-w-xl">
+              <input
+                type="text"
+                value={sealedAnalyticsSearch}
+                onChange={(event) => {
+                  setSealedAnalyticsSearch(event.target.value);
+                  setQuickSealedId("");
+                }}
+                placeholder="Search.."
+                className="w-full rounded-full border border-white/15 bg-slate-950/75 px-4 py-2.5 text-center text-sm text-slate-100 placeholder:text-slate-400 outline-none transition focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-400/20"
+              />
+            </div>
+          </div>
           <div className="section-panel-soft rounded-xl p-3">
             <p className="text-sm text-slate-200">
               This section combines detailed sealed product analytics with market-wide sealed rankings so users can analyze one product and compare it against the broader sealed market in one place.
@@ -5944,10 +5989,16 @@ export function GemIndexApp() {
               <AnalyticsDataTable
                 rows={sealedRoiLeaders}
                 getRowId={(item) => item.id}
-                gridClassName="grid-cols-[2fr_1fr_1fr]"
+                gridClassName="grid-cols-[0.7fr_2fr_1fr_1fr]"
                 maxHeightClassName="max-h-[24rem]"
                 emptyMessage="No sealed ROI leaders are available."
                 columns={[
+                  {
+                    key: "rank",
+                    label: "Rank",
+                    value: (item) => sealedRoiLeaders.findIndex((leader) => leader.id === item.id) + 1,
+                    render: (item) => `#${sealedRoiLeaders.findIndex((leader) => leader.id === item.id) + 1}`,
+                  },
                   {
                     key: "productName",
                     label: "Product",
@@ -5988,10 +6039,16 @@ export function GemIndexApp() {
               <AnalyticsDataTable
                 rows={sealedLiquidityLeaders}
                 getRowId={(item) => item.id}
-                gridClassName="grid-cols-[2fr_1fr_1fr]"
+                gridClassName="grid-cols-[0.7fr_2fr_1fr_1fr]"
                 maxHeightClassName="max-h-[24rem]"
                 emptyMessage="No sealed liquidity leaders are available."
                 columns={[
+                  {
+                    key: "rank",
+                    label: "Rank",
+                    value: (item) => sealedLiquidityLeaders.findIndex((leader) => leader.id === item.id) + 1,
+                    render: (item) => `#${sealedLiquidityLeaders.findIndex((leader) => leader.id === item.id) + 1}`,
+                  },
                   {
                     key: "productName",
                     label: "Product",
@@ -6031,10 +6088,16 @@ export function GemIndexApp() {
               <AnalyticsDataTable
                 rows={sealedVolatilityLeaders}
                 getRowId={(item) => item.id}
-                gridClassName="grid-cols-[2fr_1fr_1fr]"
+                gridClassName="grid-cols-[0.7fr_2fr_1fr_1fr]"
                 maxHeightClassName="max-h-[24rem]"
                 emptyMessage="No sealed volatility leaders are available."
                 columns={[
+                  {
+                    key: "rank",
+                    label: "Rank",
+                    value: (item) => sealedVolatilityLeaders.findIndex((leader) => leader.id === item.id) + 1,
+                    render: (item) => `#${sealedVolatilityLeaders.findIndex((leader) => leader.id === item.id) + 1}`,
+                  },
                   {
                     key: "productName",
                     label: "Product",
@@ -6499,9 +6562,15 @@ export function GemIndexApp() {
           <AnalyticsDataTable
             rows={cardsTopRows}
             getRowId={(card) => card.cardId}
-            gridClassName="grid-cols-[2fr_1fr_1fr_1fr]"
+            gridClassName="grid-cols-[0.7fr_2fr_1.2fr_1fr_1fr]"
             emptyMessage="No cards match your current search."
             columns={[
+              {
+                key: "rank",
+                label: "Rank",
+                value: (card) => cardsTopRows.findIndex((row) => row.cardId === card.cardId) + 1,
+                render: (card) => `#${cardsTopRows.findIndex((row) => row.cardId === card.cardId) + 1}`,
+              },
               {
                 key: "cardName",
                 label: "Card",
@@ -6519,7 +6588,7 @@ export function GemIndexApp() {
               },
               {
                 key: "gemRateBlended",
-                label: "10 Grade Success Rate",
+                label: "Gem Mint Rate",
                 value: (card) => card.gemRateBlended,
                 render: (card) => (investmentMetricsReady ? formatPercent(card.gemRateBlended) : "Pending"),
               },
@@ -6713,13 +6782,13 @@ export function GemIndexApp() {
                   },
                   {
                     key: "psa10Price",
-                    label: "Projected PSA 10 Value",
+                    label: "PSA 10 Value",
                     value: (card) => card.psa10Price,
                     render: (card) => usd(card.psa10Price),
                   },
                   {
                     key: "gemRateBlended",
-                    label: "10 Grade Success Rate",
+                    label: "Gem Mint Rate",
                     value: (card) => card.gemRateBlended,
                     render: (card) => formatPercent(card.gemRateBlended),
                   },
@@ -6849,6 +6918,91 @@ export function GemIndexApp() {
                     />
                   ) : (
                     <p className="text-sm text-slate-300">No flipper momentum signals are currently active.</p>
+                  )}
+                </section>
+              </div>
+              <div className="grid gap-4 xl:grid-cols-2">
+                <section className="section-panel rounded-xl p-3">
+                  <h3 className="mb-2 text-sm font-semibold text-slate-200">4-Month Momentum %</h3>
+                  {flipperMomentumLeaders.length ? (
+                    <AnalyticsDataTable
+                      rows={flipperMomentumLeaders}
+                      getRowId={(item) => `${item.cardId}-momentum`}
+                      gridClassName="grid-cols-[2fr_1fr]"
+                      maxHeightClassName="max-h-[20rem]"
+                      emptyMessage="No momentum leaders are currently active."
+                      columns={[
+                        {
+                          key: "label",
+                          label: "Card",
+                          value: (item) => item.label,
+                          render: (item) => {
+                            const [name, number] = item.label.split(/ (?=[^ ]+$)/);
+                            return (
+                              <CardCell
+                                imageUrl={item.imageUrl}
+                                name={name ?? item.label}
+                                number={number && number !== name ? number : undefined}
+                              />
+                            );
+                          },
+                        },
+                        {
+                          key: "momentum4mPct",
+                          label: "4-Month Momentum %",
+                          value: (item) => item.momentum4mPct ?? 0,
+                          render: (item) => (
+                            <span className={flipperMomentumClass(item.momentum4mPct ?? 0)}>
+                              {formatPercent(item.momentum4mPct ?? 0)}
+                            </span>
+                          ),
+                        },
+                      ]}
+                    />
+                  ) : (
+                    <p className="text-sm text-slate-300">No momentum leaders are currently active.</p>
+                  )}
+                </section>
+
+                <section className="section-panel rounded-xl p-3">
+                  <h3 className="mb-2 text-sm font-semibold text-slate-200">Liquidity %</h3>
+                  {flipperLiquidityLeaders.length ? (
+                    <AnalyticsDataTable
+                      rows={flipperLiquidityLeaders}
+                      getRowId={(item) => `${item.cardId}-liquidity`}
+                      gridClassName="grid-cols-[2fr_1fr]"
+                      maxHeightClassName="max-h-[20rem]"
+                      emptyMessage="No liquidity leaders are currently active."
+                      columns={[
+                        {
+                          key: "label",
+                          label: "Card",
+                          value: (item) => item.label,
+                          render: (item) => {
+                            const [name, number] = item.label.split(/ (?=[^ ]+$)/);
+                            return (
+                              <CardCell
+                                imageUrl={item.imageUrl}
+                                name={name ?? item.label}
+                                number={number && number !== name ? number : undefined}
+                              />
+                            );
+                          },
+                        },
+                        {
+                          key: "liquidityScore",
+                          label: "Liquidity %",
+                          value: (item) => item.liquidityScore ?? 0,
+                          render: (item) => (
+                            <span className={flipperLiquidityClass(item.liquidityScore ?? 0)}>
+                              {formatPercent(item.liquidityScore ?? 0)}
+                            </span>
+                          ),
+                        },
+                      ]}
+                    />
+                  ) : (
+                    <p className="text-sm text-slate-300">No liquidity leaders are currently active.</p>
                   )}
                 </section>
               </div>
@@ -7007,6 +7161,7 @@ export function GemIndexApp() {
                     maxHeightClassName="max-h-[28rem]"
                     emptyMessage="No card holdings are loaded for this portfolio view."
                     expandableColumnKey="actions"
+                    expandableHintText={null}
                     renderExpandedRow={(item) => (
                       <CollectionItemEditor
                         item={item}
@@ -7023,16 +7178,28 @@ export function GemIndexApp() {
                         render: (item) => {
                           const catalogCard = catalogCardForCollectionItem(item);
                           return (
-                            <CardCell
-                              imageUrl={
-                                item.card?.imageUrl ??
-                                item.card?.imageLargeUrl ??
-                                catalogCard?.imageUrl ??
-                                catalogCard?.imageLargeUrl
-                              }
-                              name={item.card?.name ?? "Unknown card"}
-                              number={item.card?.cardNumber}
-                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (catalogCard?.cardId) {
+                                  setQuickCardId(catalogCard.cardId);
+                                }
+                                setCardAnalyticsSearch(item.card ? `${item.card.name} ${item.card.cardNumber}` : "");
+                                setActiveTab("CARD_DETAILS");
+                              }}
+                              className="flex w-full items-center justify-start gap-3 text-left hover:text-cyan-100"
+                            >
+                              <CardCell
+                                imageUrl={
+                                  item.card?.imageUrl ??
+                                  item.card?.imageLargeUrl ??
+                                  catalogCard?.imageUrl ??
+                                  catalogCard?.imageLargeUrl
+                                }
+                                name={item.card?.name ?? "Unknown card"}
+                                number={item.card?.cardNumber}
+                              />
+                            </button>
                           );
                         },
                       },
@@ -7115,7 +7282,21 @@ export function GemIndexApp() {
                         key: "label",
                         label: "Set",
                         value: (row) => row.label,
-                        render: (row) => <SealedCell imageUrl={row.imageUrl} name={row.label} />,
+                        render: (row) => (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (row.productId) {
+                                setQuickSealedId(row.productId);
+                              }
+                              setSealedAnalyticsSearch(row.label);
+                              setActiveTab("SEALED_ANALYTICS");
+                            }}
+                            className="flex w-full items-center justify-start gap-3 text-left hover:text-cyan-100"
+                          >
+                            <SealedCell imageUrl={row.imageUrl} name={row.label} />
+                          </button>
+                        ),
                       },
                       { key: "productType", label: "Product Type", value: (row) => row.productType },
                       { key: "portfolioName", label: "Portfolio", value: (row) => row.portfolioName, filterable: selectedPortfolioView === "ALL" },
@@ -7190,7 +7371,28 @@ export function GemIndexApp() {
                           ? `${item.card.name} ${item.card.cardNumber}`
                           : "Unknown card",
                       render: (item) => (
-                        <span className="flex w-full items-center justify-start gap-3 text-left">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const matchedCard =
+                              item.card
+                                ? cards.find(
+                                    (card) =>
+                                      card.cardName === item.card?.name &&
+                                      card.cardNumber === item.card?.cardNumber &&
+                                      card.setCode.toLowerCase() === (item.card?.setCode ?? "").toLowerCase(),
+                                  ) ?? null
+                                : null;
+                            if (matchedCard?.cardId) {
+                              setQuickCardId(matchedCard.cardId);
+                            }
+                            setCardAnalyticsSearch(
+                              item.card ? `${item.card.name} ${item.card.cardNumber}` : "",
+                            );
+                            setActiveTab("CARD_DETAILS");
+                          }}
+                          className="flex w-full items-center justify-start gap-3 text-left hover:text-cyan-100"
+                        >
                           <ProductThumbnail
                             imageUrl={item.card?.imageUrl ?? item.card?.imageLargeUrl}
                             alt={item.card ? `${item.card.name} ${item.card.cardNumber}` : "Wishlist item"}
@@ -7200,7 +7402,7 @@ export function GemIndexApp() {
                           <span>
                             {item.card?.name} {item.card?.cardNumber}
                           </span>
-                        </span>
+                        </button>
                       ),
                     },
                     {
@@ -7233,6 +7435,7 @@ export function GemIndexApp() {
                   maxHeightClassName="max-h-[20rem]"
                   emptyMessage="No sealed wishlist items yet."
                   expandableColumnKey="actions"
+                  expandableHintText={null}
                   renderExpandedRow={(item) => (
                     <SealedWishlistEditor
                       item={item}
@@ -7246,7 +7449,18 @@ export function GemIndexApp() {
                       label: "Product",
                       value: (item) => `${item.productName} ${item.setCode} ${item.setName ?? ""}`,
                       render: (item) => (
-                        <span className="flex w-full items-center justify-start gap-3 text-left">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const productId = item.productId ?? item.product?.id ?? "";
+                            if (productId) {
+                              setQuickSealedId(productId);
+                            }
+                            setSealedAnalyticsSearch(item.productName);
+                            setActiveTab("SEALED_ANALYTICS");
+                          }}
+                          className="flex w-full items-center justify-start gap-3 text-left hover:text-cyan-100"
+                        >
                           <ProductThumbnail
                             imageUrl={item.imageUrl ?? item.setLogoUrl ?? item.setSymbolUrl}
                             alt={item.productName}
@@ -7256,7 +7470,7 @@ export function GemIndexApp() {
                           <span>
                             {item.productName} ({setCodeLabel(item.setCode)})
                           </span>
-                        </span>
+                        </button>
                       ),
                     },
                     {
